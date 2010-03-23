@@ -46,6 +46,7 @@ public class DatanodeDescriptor extends DatanodeInfo {
 			this.targets = targets;
 		}
 	}
+
 	// TODO: add inner class BlockSrcTargetPair which is used to record the sources node that data come from
 	/** Block,sources and targets pair */
 	static class BlockSrcTargetPair {
@@ -62,14 +63,16 @@ public class DatanodeDescriptor extends DatanodeInfo {
 		final DatanodeDescriptor[] sources;	
 		final DatanodeDescriptor[] targets;
 		// Index to confirm the position of the specified block to be decoded
-		int index;
+		final int index;
+		final RSGroup group;
 		
 		BlockSrcTargetPair(Block[] block, DatanodeDescriptor[] srcs,
-				DatanodeDescriptor[] targets, int idx) {
+				DatanodeDescriptor[] targets, int idx, RSGroup grp) {
 			this.blocks = block;
 			this.sources = srcs;
 			this.targets = targets;
 			this.index = idx; 
+			this.group = grp;
 		}
 	}
 
@@ -116,8 +119,8 @@ public class DatanodeDescriptor extends DatanodeInfo {
 
 		/** Enqueue */
 		synchronized boolean offer(Block[] blocks, DatanodeDescriptor[] srcs,
-				DatanodeDescriptor[] targets, int idx) {
-			return blockcq.offer(new BlockSrcTargetPair(blocks, srcs, targets, idx));
+				DatanodeDescriptor[] targets, int idx, RSGroup grp) {
+			return blockcq.offer(new BlockSrcTargetPair(blocks, srcs, targets, idx, grp));
 		}
 
 		/** Dequeue */
@@ -349,9 +352,9 @@ public class DatanodeDescriptor extends DatanodeInfo {
 	/**
 	 * Store block Encoding work.
 	 */
-	void addBlockToBeEncoded(Block[] blocks, DatanodeDescriptor[] srcs, DatanodeDescriptor[] targets) {
+	void addBlockToBeEncoded(Block[] blocks, DatanodeDescriptor[] srcs, DatanodeDescriptor[] targets, RSGroup grp) {
 		assert (blocks != null && srcs != null && srcs.length > 0&& targets != null && targets.length > 0);
-		encodingBlocks.offer(blocks, srcs, targets, -1); // For encoding tasks, the index is useless
+		encodingBlocks.offer(blocks, srcs, targets, -1, grp); // For encoding tasks, the index is useless
 	}
 	//TODO
 	
@@ -359,12 +362,13 @@ public class DatanodeDescriptor extends DatanodeInfo {
 	/**
 	 * Store block Decoding work.
 	 */
-	void addBlockToBeDecoded(Block block, DatanodeDescriptor[] srcs, DatanodeDescriptor[] targets, int idx) {
-		assert (block != null && srcs != null && srcs.length > 0&& targets != null && targets.length > 0);
+	void addBlockToBeDecoded(Block block, DatanodeDescriptor[] srcs, DatanodeDescriptor[] targets, int idx, RSGroup grp) {
+		assert (block != null && srcs != null && srcs.length > 0&& targets != null && targets.length > 0
+				  && idx >= 0 && idx < srcs.length);
 		Block blocks[] = new Block[2];
 		blocks[0] = block;
 		blocks[1] = (Block)null; // This is useless just for API consistence
-		decodingBlocks.offer(blocks, srcs, targets, idx);
+		decodingBlocks.offer(blocks, srcs, targets, idx, grp);
 	}
 	//TODO
 
