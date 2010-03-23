@@ -121,6 +121,8 @@ class BlockCommand extends DatanodeCommand {
 	
 	// TODO add sources here
 	DatanodeInfo sources[][];
+	
+	RSGroup group;
 	// TODO
 
 	public BlockCommand() {
@@ -161,6 +163,7 @@ class BlockCommand extends DatanodeCommand {
 		blocks = p.blocks;
 		targets[0] = p.targets;
 		sources[0] = p.sources;
+		group = p.group;
 	}
 	//TODO 
 

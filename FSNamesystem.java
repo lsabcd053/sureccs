@@ -1452,17 +1452,18 @@ class FSNamesystem implements FSConstants, FSNamesystemMBean {
 				return;
 		}
 		
-		int size = tar[0].length;
+		int size = 0;
 		DatanodeDescriptor targets[] = new DatanodeDescriptor[size*(n-m)];
 		
 		// Here changes the tars to one dimension to consist with the API
 		for(i = 0; i < (n-m); i++) {
+			size = tar[i].length;
 			for(int j = 0; j < size; j++) {
 				targets[j+i*size] = tar[i][j];
 			}
 		}
 		DatanodeDescriptor encodingNode = targets[0];
-		encodingNode.addBlockToBeEncoded(blks, sources, targets);
+		encodingNode.addBlockToBeEncoded(blks, sources, targets, group);
 		for(DatanodeDescriptor dn : targets) {
 			dn.incBlocksScheduled();
 		}
@@ -2816,7 +2817,7 @@ class FSNamesystem implements FSConstants, FSNamesystemMBean {
 			return;
 		DatanodeDescriptor srcNode = targets[0]; // The first targets will do the coding task
 		//scheduledReplication++;
-		srcNode.addBlockToBeDecoded(block,sources,targets, index);
+		srcNode.addBlockToBeDecoded(block,sources,targets, index, group);
 		workFound++;
 		for(DatanodeDescriptor dn : targets) {
 			dn.incBlocksScheduled();
