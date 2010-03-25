@@ -2,7 +2,7 @@
 #labels Featured,Phase-Support,Phase-QA
 
 = Introduction =
-This would help you deploy the hadoop cluster, namenode and datanodes included, in a linux-like system. We have done a very good test in ubuntu 8.04, and we are pretty sure that other os could also available.
+This would help you deploy the hadoop cluster, namenode and datanodes included, in a linux-like system. We have done a very good test in ubuntu 8.04, and we are pretty sure that other os could also be available.
 
 
 = Details =
