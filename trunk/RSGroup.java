@@ -18,6 +18,7 @@
 package org.apache.hadoop.dfs;
 
 import java.io.*;
+
 import org.apache.hadoop.io.*;
 import org.apache.hadoop.dfs.BlocksMap.BlockInfo;
 
@@ -29,7 +30,15 @@ import org.apache.hadoop.dfs.BlocksMap.BlockInfo;
  * 
  **************************************************/
 
-class RSGroup {
+class RSGroup implements Writable{
+	
+	static { // register a ctor
+		WritableFactories.setFactory(RSGroup.class, new WritableFactory() {
+			public Writable newInstance() {
+				return new RSGroup();
+			}
+		});
+	}
 
 	private int groupID; // The only identification for group
 	private int szGroup; // Size of a group to verify the total
@@ -40,6 +49,34 @@ class RSGroup {
 	// That is the code ability
 
 	private BlockInfo blocks[] = null;
+	
+	// ///////////////////////////////////
+	// Writable To support serialization, we should write a block to disc
+	// ///////////////////////////////////
+	public void write(DataOutput out) throws IOException {
+		out.writeInt(groupID);
+		out.writeInt(szGroup);
+		out.writeInt(couldBeCoded);
+		out.writeInt(blocks.length);
+		for(int i = 0; i < blocks.length; i++)
+		{
+			blocks[i].write(out);
+		}
+	}
+
+	public void readFields(DataInput in) throws IOException {
+		this.groupID = in.readInt();
+		this.szGroup = in.readInt();
+		this.couldBeCoded = in.readInt();
+		this.blocks = new BlockInfo[in.readInt()];
+		for(int i = 0; i < blocks.length; i++)
+		{
+			blocks[i].readFields(in);
+		}
+		if (szGroup < 0) {
+			throw new IOException("Unexpected Group size: " + szGroup);
+		}
+	}
 
 	public RSGroup() {
 		groupID = 0;
@@ -170,6 +207,5 @@ class RSGroup {
 	public void setUnableToCode() {
 		this.couldBeCoded = 0;
 	}
-
-
+	
 }
