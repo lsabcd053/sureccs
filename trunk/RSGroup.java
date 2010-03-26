@@ -43,6 +43,8 @@ class RSGroup implements Writable{
 	private int groupID; // The only identification for group
 	private int szGroup; // Size of a group to verify the total
 	// TODO Add groupid here
+	private int rsn;
+	private int rsm;
 	private int couldBeCoded; // This could be used to verify that if it has the
 
 	// ability to recover when all the replicas are broken,
@@ -57,6 +59,8 @@ class RSGroup implements Writable{
 		out.writeInt(groupID);
 		out.writeInt(szGroup);
 		out.writeInt(couldBeCoded);
+		out.writeInt(rsn);
+		out.writeInt(rsm);
 		out.writeInt(blocks.length);
 		for(int i = 0; i < blocks.length; i++)
 		{
@@ -68,6 +72,8 @@ class RSGroup implements Writable{
 		this.groupID = in.readInt();
 		this.szGroup = in.readInt();
 		this.couldBeCoded = in.readInt();
+		this.rsn = in.readInt();
+		this.rsm = in.readInt();
 		this.blocks = new BlockInfo[in.readInt()];
 		for(int i = 0; i < blocks.length; i++)
 		{
@@ -83,17 +89,21 @@ class RSGroup implements Writable{
 		szGroup = 0;
 		blocks = null;
 		couldBeCoded = 1;
+		rsn = FSConstants.RSn;
+		rsm = FSConstants.RSm;
 	}
 
-	public RSGroup(int gID, int size) {
-		this.set(gID, size);
+	public RSGroup(int gID, int size, int n, int m) {
+		this.set(gID, size, n, m);
 		blocks = null;
 		couldBeCoded = 1;
 	}
 
-	public void set(int gID, int size) {
+	public void set(int gID, int size, int n, int m) {
 		groupID = gID;
 		szGroup = size;
+		rsn = n;
+		rsm = m;
 	}
 
 	public int getGroupId() {
