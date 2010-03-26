@@ -67,8 +67,7 @@ This is comment from the hadoop source code in java version.
 	 * +-----------------------------------------------------+ | actual data
 	 * ...... | +-----------------------------------------------------+
 	 * 
-	 * x = (length of data + BYTE_PER_CHECKSUM - 1)/BYTES_PER_CHECKSUM *
-	 * CHECKSUM_SIZE
+	 * x = (length of data + BYTE_PER_CHECKSUM - 1) / BYTES_PER_CHECKSUM*CHECKSUM_SIZE
 	 * 
 	 * CHECKSUM_SIZE depends on CHECKSUM_TYPE (usually, 4 for CRC32)
 	 * 
