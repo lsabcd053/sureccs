@@ -1128,9 +1128,8 @@ class INodeFile extends INode {
 		}
 		// TODO I choose here to add the block to ensure consistency
 		if (size % RSm == 0) {
-			RSGroup newGroup = new RSGroup(grpSize++, FSConstants.RSn);
-			this.addGroup(newGroup);
-			
+			RSGroup newGroup = new RSGroup(grpSize++, RSn, RSn, RSm);
+			this.addGroup(newGroup);			
 		}
 		// We must make sure that at least one block is in the blocks
 		// So we can add it to the latest group.
