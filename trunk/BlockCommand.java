@@ -123,6 +123,7 @@ class BlockCommand extends DatanodeCommand {
 	DatanodeInfo sources[][];
 	
 	RSGroup group;
+	int index;
 	// TODO
 
 	public BlockCommand() {
@@ -164,6 +165,7 @@ class BlockCommand extends DatanodeCommand {
 		targets[0] = p.targets;
 		sources[0] = p.sources;
 		group = p.group;
+		index = p.index;
 	}
 	//TODO 
 
@@ -196,6 +198,10 @@ class BlockCommand extends DatanodeCommand {
 	
 	RSGroup getGroup(){
 		return this.group;
+	}
+	
+	int getIndex(){
+		return this.index;
 	}
 
 	// /////////////////////////////////////////
@@ -234,6 +240,7 @@ class BlockCommand extends DatanodeCommand {
 		
 		// TODO group seriable
 		group.write(out);
+		out.writeInt(index);
 	}
 
 	public void readFields(DataInput in) throws IOException {
@@ -266,5 +273,6 @@ class BlockCommand extends DatanodeCommand {
 		
 		// TODO group seriable
 		group.readFields(in);
+		index = in.readInt();
 	}
 }
