@@ -1378,6 +1378,9 @@ class FSNamesystem implements FSConstants, FSNamesystemMBean {
 				//this.neededReplications.add(blocks[i], 0, 0, filenode
 						//.getReplication());
 			}
+			// Initiate the encoding process automatically
+			// Next time we should make it manual
+			initiateEncodingProcess(newCodingBlocks);
 		}
 
 		// TODO Add complete
