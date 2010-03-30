@@ -999,23 +999,20 @@ public class DataNode extends Configured implements InterDatanodeProtocol,
 			int numOfSrcToBeRead = sources.length;
 			int index;
 					
-			for(int i = 0; i < numOfSrcToBeRead; i++ )
-			{
-				index = NotNull[i];
-				try{
+			
+			try {
+				for(int i = 0; i < numOfSrcToBeRead; i++ )
+				{
+					index = NotNull[i];
 					byte[] buffer = new byte[BUFFER_SIZE];
 					BlockReader reader = sendCodingRst(allBlocks[index], sources[index], 0, -1,
-							BUFFER_SIZE, true);
+								BUFFER_SIZE, true);
 					exec.submit(new codingBlockReceiver(allBlocks[index], reader, buffer, barrier));
-					
-				}catch(IOException e) {
-					exec.shutdown();
-					// TODO log the error
+						
 				}
-			}
-			try {
 				// Wait for all the source blocks ready in place(the tmp file)
 				barrier.await();
+				/*
 				DataInputStream[] fsIn = new DataInputStream[n];
 				Coder cd = new Coder();
 				for (int i = 0; i < m; i++) {
@@ -1049,7 +1046,7 @@ public class DataNode extends Configured implements InterDatanodeProtocol,
 				// TODO We need to copy all the coded blocks to the targets
 				
 				// Here we should clear the pro-used blocks for encoding/decoding
-				/*
+				
 				Block[] invalidBlks = new Block[m]; 
 				for(int i = 0; i < m; i++)
 				{
