@@ -113,6 +113,16 @@ class RSGroup implements Writable{
 	public int getSizeGroup() {
 		return szGroup;
 	}
+	
+	public int getN()
+	{
+		return rsn;
+	}
+	
+	public int getM()
+	{
+		return rsm;
+	}
 
 	/**
 	 * add a block to the group
