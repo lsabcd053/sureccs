@@ -120,11 +120,12 @@ class BlockCommand extends DatanodeCommand {
 	DatanodeInfo targets[][];
 	
 	// TODO add sources here
-	DatanodeInfo sources[][];
-	
+	DatanodeInfo sources[][];	
 	RSGroup group;
 	int index;
 	// TODO
+	
+	private static final DatanodeInfo[][] EMPTY_TARGET = {};
 
 	public BlockCommand() {
 	}
@@ -145,6 +146,9 @@ class BlockCommand extends DatanodeCommand {
 			blocks[i] = p.block;
 			targets[i] = p.targets;
 		}
+		this.sources = EMPTY_TARGET;
+		this.group = null;
+		this.index = -1;
 	}
 	
 	//TODO blockCommand for coding
@@ -169,8 +173,6 @@ class BlockCommand extends DatanodeCommand {
 	}
 	//TODO 
 
-	private static final DatanodeInfo[][] EMPTY_TARGET = {};
-
 	/**
 	 * Create BlockCommand for the given action
 	 * 
@@ -181,6 +183,9 @@ class BlockCommand extends DatanodeCommand {
 		super(action);
 		this.blocks = blocks;
 		this.targets = EMPTY_TARGET;
+		this.sources = EMPTY_TARGET;
+		this.group = null;
+		this.index = -1;
 	}
 
 	Block[] getBlocks() {
@@ -221,15 +226,7 @@ class BlockCommand extends DatanodeCommand {
 		for (int i = 0; i < blocks.length; i++) {
 			blocks[i].write(out);
 		}
-		// TODO sources seriable
-		out.writeInt(sources.length);
-		for (int i = 0; i < sources.length; i++) {
-			out.writeInt(sources[i].length);
-			for (int j = 0; j < sources[i].length; j++) {
-				sources[i][j].write(out);
-			}
-		}
-		// TODO
+
 		out.writeInt(targets.length);
 		for (int i = 0; i < targets.length; i++) {
 			out.writeInt(targets[i].length);
@@ -238,9 +235,17 @@ class BlockCommand extends DatanodeCommand {
 			}
 		}
 		
-		// TODO group seriable
+		// TODO sources seriable
+		out.writeInt(sources.length);
+		for (int i = 0; i < sources.length; i++) {
+			out.writeInt(sources[i].length);
+			for (int j = 0; j < sources[i].length; j++) {
+				sources[i][j].write(out);
+			}
+		}
 		group.write(out);
 		out.writeInt(index);
+		// TODO
 	}
 
 	public void readFields(DataInput in) throws IOException {
@@ -250,17 +255,6 @@ class BlockCommand extends DatanodeCommand {
 			blocks[i] = new Block();
 			blocks[i].readFields(in);
 		}
-		
-		// TODO sources seriable
-		this.sources = new DatanodeInfo[in.readInt()][];
-		for (int i = 0; i < sources.length; i++) {
-			this.sources[i] = new DatanodeInfo[in.readInt()];
-			for (int j = 0; j < sources[i].length; j++) {
-				sources[i][j] = new DatanodeInfo();
-				sources[i][j].readFields(in);
-			}
-		}
-		// TODO
 
 		this.targets = new DatanodeInfo[in.readInt()][];
 		for (int i = 0; i < targets.length; i++) {
@@ -270,9 +264,18 @@ class BlockCommand extends DatanodeCommand {
 				targets[i][j].readFields(in);
 			}
 		}
-		
-		// TODO group seriable
+				
+		// TODO sources seriable
+		this.sources = new DatanodeInfo[in.readInt()][];
+		for (int i = 0; i < sources.length; i++) {
+			this.sources[i] = new DatanodeInfo[in.readInt()];
+			for (int j = 0; j < sources[i].length; j++) {
+				sources[i][j] = new DatanodeInfo();
+				sources[i][j].readFields(in);
+			}
+		}
 		group.readFields(in);
 		index = in.readInt();
+		// TODO
 	}
 }
