@@ -1413,6 +1413,7 @@ class FSNamesystem implements FSConstants, FSNamesystemMBean {
 		try{
 			group = filenode.getGroupfromBlock(blkInfo);
 		}catch(IOException e){
+			return;
 			//Debug.writeDebug("In processCodingTask() in FSNamesystem.java");
 		}
 		if(group == null)
@@ -1432,17 +1433,14 @@ class FSNamesystem implements FSConstants, FSNamesystemMBean {
 			if(sources[i] == null)
 			{
 				// TODO log the failure, blocks' failures block the encoding process
-				break;
+				for(i  = 0; i < n; i++)
+				{
+					grpBlocks[i].setUnableToCode();
+				}
+				return;
 			}
 		}
-		if(i != m-1)
-		{
-			for(i  = 0; i < n; i++)
-			{
-				grpBlocks[i].setUnableToCode();
-			}
-			return;
-		}
+
 		
 		DatanodeDescriptor tar[][] = new DatanodeDescriptor[n-m][];
 		
@@ -1455,12 +1453,13 @@ class FSNamesystem implements FSConstants, FSNamesystemMBean {
 				return;
 		}
 		
-		int size = 0;
+		// We assume that all the targets[] have the same length
+		int size = tar[0].length;
 		DatanodeDescriptor targets[] = new DatanodeDescriptor[size*(n-m)];
 		
 		// Here changes the tars to one dimension to consist with the API
 		for(i = 0; i < (n-m); i++) {
-			size = tar[i].length;
+			//size = tar[i].length;
 			for(int j = 0; j < size; j++) {
 				targets[j+i*size] = tar[i][j];
 			}

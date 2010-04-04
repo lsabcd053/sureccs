@@ -124,18 +124,11 @@ public class DatanodeDescriptor extends DatanodeInfo {
 		}
 
 		/** Dequeue */
-		synchronized List<BlockSrcTargetPair> poll(int numTargets) {
-			if (numTargets <= 0 || blockcq.isEmpty()) {
+		synchronized BlockSrcTargetPair poll() {
+			if (blockcq.isEmpty()) {
 				return null;
 			} else {
-				List<BlockSrcTargetPair> results = new ArrayList<BlockSrcTargetPair>();
-				for (; !blockcq.isEmpty() && numTargets > 0;) {
-					numTargets -= blockcq.peek().targets.length;
-					if (numTargets >= 0) {
-						results.add(blockcq.poll());
-					}
-				}
-				return results;
+				return blockcq.poll();
 			}
 		}
 	}
@@ -450,18 +443,14 @@ public class DatanodeDescriptor extends DatanodeInfo {
 	// TODO return coding command 
 	// Each time we only conduct an encoding/decoding command
 	BlockCommand getEncodingCommand() {
-		List<BlockSrcTargetPair> blocksrctargetlist = encodingBlocks
-				.poll(1);
-		BlockSrcTargetPair p = blocksrctargetlist.get(0);
-		return blocksrctargetlist == null ? null : new BlockCommand(
+		BlockSrcTargetPair p = encodingBlocks.poll();
+		return p == null ? null : new BlockCommand(
 				DatanodeProtocol.DNA_ENCODING, p, 0);
 	}
 	
 	BlockCommand getDecodingCommand() {
-		List<BlockSrcTargetPair> blocksrctargetlist = decodingBlocks
-				.poll(1);
-		BlockSrcTargetPair p = blocksrctargetlist.get(0);
-		return blocksrctargetlist == null ? null : new BlockCommand(
+		BlockSrcTargetPair p = decodingBlocks.poll();
+		return p == null ? null : new BlockCommand(
 				DatanodeProtocol.DNA_DECODING, p, 0);
 	}
 	//TODO
