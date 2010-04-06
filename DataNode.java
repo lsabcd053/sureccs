@@ -875,7 +875,7 @@ public class DataNode extends Configured implements InterDatanodeProtocol,
 			{
 				//TODO log the error: There is something wrong with the sources
 				//The number is not expected
-				break;
+				return true;
 			}
 			for(int i = 0; i < NotNull.length; i++)
 			{
@@ -998,17 +998,14 @@ public class DataNode extends Configured implements InterDatanodeProtocol,
 			Block[] allBlocks = group.getBlocks();
 			int numOfSrcToBeRead = sources.length;
 			int index;
-					
-			
+							
 			try {
 				for(int i = 0; i < numOfSrcToBeRead; i++ )
 				{
 					index = NotNull[i];
 					byte[] buffer = new byte[BUFFER_SIZE];
-					BlockReader reader = sendCodingRst(allBlocks[index], sources[index], 0, -1,
-								BUFFER_SIZE, true);
-					exec.submit(new codingBlockReceiver(allBlocks[index], reader, buffer, barrier));
-						
+					exec.submit(new codingBlockReceiver(allBlocks[index],
+							sources[index], buffer, barrier));					
 				}
 				// Wait for all the source blocks ready in place(the tmp file)
 				barrier.await();
@@ -1063,125 +1060,129 @@ public class DataNode extends Configured implements InterDatanodeProtocol,
 			} catch (InterruptedException e) {
 				exec.shutdown();
 				// TODO log the error
-			} catch (IOException e) {
-				exec.shutdown();
-				// TODO log the error
-				//e.printStackTrace();
-			}
-			
+			} 	
 		}
 	}
 
-	// TODO We just figure out the request for asking a block to process the
-	// coding job
-	/**
-	 * Try to send en/decoding request to the relative targets
-	 * 
-	 * @param b
-	 *            Block to be got from current target for en/decoding task
-	 * @param target
-	 * 			  The target of this coding request
-	 * @param startOffset 
-	 * 			  The start offset of the read, here it should default to 0
-	 * @param len   
-	 * 			  Length to read the block, a illegal(negative e.g.) no. is to be assigned
-	 * @param bufferSize
-	 * 			  The size of the receiving buffer, use the default
-	 * @param verifyChecksum
-	 * 			  Would checksum checking been available
-	 * @return We return the socket to use for accepting data from the request
-	 */
-	private BlockReader sendCodingRst(Block b,
-			DatanodeInfo src, long startOffset, long len,
-			int bufferSize, boolean verifyChecksum) throws IOException {	
-		Socket sock = null;		
-		try
-		{
-			InetSocketAddress curTarget = 
-		          NetUtils.createSocketAddr(src.getName());
-		    sock = newSocket();
-		    sock.connect(curTarget, socketTimeout);
-		    sock.setSoTimeout(socketTimeout);
-		} catch (IOException e)
-		{
-			//TODO log the error
-		}
-		//
-		// Get bytes in block, set streams
-		//
-		// in and out will be closed when sock is closed (by the caller)
-		DataOutputStream out = new DataOutputStream(
-				new BufferedOutputStream(NetUtils.getOutputStream(sock,
-						WRITE_TIMEOUT)));
 
-		// write the header.
-		out.writeShort(DATA_TRANSFER_VERSION);
-		out.write(OP_CODING_BLOCK);
-		out.writeLong(b.getBlockId());
-		out.writeLong(b.getGenerationStamp());
-		out.writeLong(startOffset);
-		out.writeLong(len);
-		out.flush();
-
-		DataInputStream in = new DataInputStream(
-				new BufferedInputStream(NetUtils.getInputStream(sock),
-						bufferSize));
-
-		if (in.readShort() != OP_STATUS_SUCCESS) {
-			throw new IOException(
-					"Got error in response to OP_CODING_BLOCK ");
-		}
-		DataChecksum checksum = DataChecksum.newDataChecksum(in);
-		// Warning when we get CHECKSUM_NULL?
-
-		// Read the first chunk offset.
-		long firstChunkOffset = in.readLong();
-
-		if (firstChunkOffset < 0
-				|| firstChunkOffset > startOffset
-				|| firstChunkOffset >= (startOffset + checksum
-						.getBytesPerChecksum())) {
-			throw new IOException(
-					"CodingDataReceiver: error in first chunk offset ("
-							+ firstChunkOffset + ") startOffset is "
-							+ startOffset );
-		}
-		
-		// Here we don't need a file name
-		return new BlockReader((String)null, b.getBlockId(), in, checksum,
-				verifyChecksum, startOffset, firstChunkOffset, sock);
-	}
 	
 	class codingBlockReceiver implements Runnable{
-		Block block;
+		private Block block;
+		private DatanodeInfo source;
 		private BlockReader reader;
-		byte[] buffer;
-		CyclicBarrier barrier;
+		private byte[] buffer;
+		private CyclicBarrier barrier;
 		//byte[] checksumBuf;
 		
-		codingBlockReceiver(Block b, BlockReader rd, byte[] buf, CyclicBarrier cb)
+		codingBlockReceiver(Block b, DatanodeInfo src, byte[] buf, CyclicBarrier cb)
 		{
 			this.block = b;
-			this.reader = rd;
 			this.buffer = buf;
 			this.barrier = cb;
+			this.source = src; 
 			//this.checksumBuf = csBuf;
+		}
+		
+		// TODO We just figure out the request for asking a block to process the
+		// coding job
+		/**
+		 * Try to send en/decoding request to the relative targets
+		 * 
+		 * @param b
+		 *            Block to be got from current target for en/decoding task
+		 * @param src
+		 * 			  The target of this coding request
+		 * @param startOffset 
+		 * 			  The start offset of the read, here it should default to 0
+		 * @param len   
+		 * 			  Length to read the block, a illegal(negative e.g.) no. is to be assigned
+		 * @param bufferSize
+		 * 			  The size of the receiving buffer, use the default
+		 * @param verifyChecksum
+		 * 			  Would checksum checking been available
+		 * @return We return the BlockReader to use for accepting data from the request
+		 */
+		private BlockReader sendCodingRst(Block b,
+				DatanodeInfo src, long startOffset, long len,
+				int bufferSize, boolean verifyChecksum) throws IOException {	
+			Socket sock = null;		
+			try
+			{
+				InetSocketAddress curTarget = 
+			          NetUtils.createSocketAddr(src.getName());
+			    sock = newSocket();
+			    sock.connect(curTarget, socketTimeout);
+			    sock.setSoTimeout(socketTimeout);
+			} catch (IOException e)
+			{
+				//TODO log the error
+			}
+			//
+			// Get bytes in block, set streams
+			//
+			// in and out will be closed when sock is closed (by the caller)
+			DataOutputStream out = new DataOutputStream(
+					new BufferedOutputStream(NetUtils.getOutputStream(sock,
+							WRITE_TIMEOUT)));
+
+			// write the header.
+			out.writeShort(DATA_TRANSFER_VERSION);
+			out.write(OP_CODING_BLOCK);
+			out.writeLong(b.getBlockId());
+			out.writeLong(b.getGenerationStamp());
+			out.writeLong(startOffset);
+			out.writeLong(len);
+			out.flush();
+
+			DataInputStream in = new DataInputStream(
+					new BufferedInputStream(NetUtils.getInputStream(sock),
+							bufferSize));
+
+			if (in.readShort() != OP_STATUS_SUCCESS) {
+				throw new IOException(
+						"Got error in response to OP_CODING_BLOCK ");
+			}
+			DataChecksum checksum = DataChecksum.newDataChecksum(in);
+			// Warning when we get CHECKSUM_NULL?
+
+			// Read the first chunk offset.
+			long firstChunkOffset = in.readLong();
+
+			if (firstChunkOffset < 0
+					|| firstChunkOffset > startOffset
+					|| firstChunkOffset >= (startOffset + checksum
+							.getBytesPerChecksum())) {
+				throw new IOException(
+						"CodingDataReceiver: error in first chunk offset ("
+								+ firstChunkOffset + ") startOffset is "
+								+ startOffset );
+			}
+			
+			// Here we don't need a file name
+			return new BlockReader((String)null, b.getBlockId(), in, checksum,
+					verifyChecksum, startOffset, firstChunkOffset, sock);
 		}
 		
 		public void run()
 		{
+			
 			OutputStream out = null;
 			FSDataset.BlockWriteStreams streams = null;
 			try{
+				reader = sendCodingRst(block, source, 0, -1,BUFFER_SIZE, true);		
 				streams = data.writeToBlock(block, false);
-				if(streams != null)
+				if(streams != null && reader != null)
 				{
 					out = streams.dataOut;
+					reader.readChecksumChunk(buffer, 0, buffer.length, out);		
+					barrier.await();
+				} else
+				{
+					// TODO Log the error!
+					barrier.await();
+					return;
 				}
-				//reader.re
-				reader.readChecksumChunk(buffer, 0, buffer.length, out);								
-				//out.write(buffer);
-				barrier.await();
+				
 			}
 			catch(IOException e)
 			{
