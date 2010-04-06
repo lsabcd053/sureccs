@@ -158,7 +158,7 @@ class BlockCommand extends DatanodeCommand {
 	 * @param blocks
 	 *            blocks to be coded
 	 */
-	BlockCommand(int action, BlockSrcTargetPair p, int yes) {
+	BlockCommand(int action, BlockSrcTargetPair p) {
 		super(action);
 
 		blocks = new Block[p.blocks.length];
@@ -274,6 +274,7 @@ class BlockCommand extends DatanodeCommand {
 				sources[i][j].readFields(in);
 			}
 		}
+		group = new RSGroup();
 		group.readFields(in);
 		index = in.readInt();
 		// TODO

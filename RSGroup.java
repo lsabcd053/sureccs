@@ -77,6 +77,7 @@ class RSGroup implements Writable{
 		this.blocks = new BlockInfo[in.readInt()];
 		for(int i = 0; i < blocks.length; i++)
 		{
+			blocks[i] = new BlockInfo();
 			blocks[i].readFields(in);
 		}
 		if (szGroup < 0) {
