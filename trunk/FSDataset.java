@@ -1010,6 +1010,7 @@
 				// re-opens the connection and retries sending those packets.
 				// 
 				DataNode.LOG.info("Reopen Block " + b);
+				
 				return null;
 			}
 			long blockSize = b.getNumBytes();
@@ -1041,12 +1042,12 @@
 					ongoingCreates.remove(b);
 				}
 				FSVolume v = null;
-				if (!isRecovery) {
+				if (!isRecovery) {					
 					v = volumes.getNextVolume(blockSize);
 					// create temporary file to hold block in the designated
 					// volume
 					// Do not insert temporary file into volume map.
-					f = createTmpFile(v, b);
+					f = createTmpFile(v, b);					
 					volumeMap.put(b, new DatanodeBlockInfo(v));
 				}
 				ongoingCreates.put(b, new ActiveFile(f, threads));
