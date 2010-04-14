@@ -36,6 +36,7 @@ import org.apache.hadoop.mapred.StatusHttpServer;
 import org.apache.hadoop.dfs.BlockCommand;
 import org.apache.hadoop.dfs.DatanodeProtocol;
 import org.apache.hadoop.dfs.DFSClient.BlockReader;
+import org.apache.hadoop.dfs.DFSClient.DFSOutputStream;
 import org.apache.hadoop.dfs.FSDatasetInterface.MetaDataInputStream;
 import org.apache.hadoop.dfs.datanode.metrics.DataNodeMetrics;
 import org.apache.hadoop.dfs.BlockMetadataHeader;
@@ -892,7 +893,28 @@ public class DataNode extends Configured implements InterDatanodeProtocol,
 					DatanodeProtocol.DNA_ENCODING, NotNull, bcmd.getIndex());			
 			break;
 		case DatanodeProtocol.DNA_DECODING:
-			// decodingBlock()
+			DatanodeInfo[] srcs1 = bcmd.getSources()[0];
+			DatanodeInfo[] tars1 = bcmd.getTargets()[0];
+			RSGroup group1= bcmd.getGroup();
+			Block[] blocks1 = bcmd.getBlocks();
+			int index = bcmd.getIndex();			
+			int[] NotNull1 = new int[group1.getM()];
+			int count = 0;
+			for(int i = 0; i < srcs1.length; i++)
+			{
+				if(srcs1[i] != null)
+					count++;
+				if(count < NotNull1.length)
+					NotNull1[count] = i;
+			}
+			if(count < group1.getM())
+			{
+				return false;
+			}
+			
+			int size1 = group1.getM();
+			new codingBlockControlor(blocks1, srcs1, tars1, group1, size1,
+					DatanodeProtocol.DNA_DECODING, NotNull1, index);			
 			break;
 		case DatanodeProtocol.DNA_INVALIDATE:
 			//
@@ -971,6 +993,8 @@ public class DataNode extends Configured implements InterDatanodeProtocol,
 		int nThreads;
 		CyclicBarrier barrier;
 		ExecutorService exec;
+		DFSOutputStream[] outstream;
+		long blockSize;
 		
 		public codingBlockControlor(Block[] blks, DatanodeInfo[] srcs, 
 				DatanodeInfo[] tars, RSGroup grp, int n, int t, int[] nn, int idx)
@@ -984,7 +1008,7 @@ public class DataNode extends Configured implements InterDatanodeProtocol,
 			this.NotNull = nn;
 			this.index = idx;
 			Configuration conf = new Configuration();
-			long blockSize = conf.getLong("dfs.block.size",
+			blockSize = conf.getLong("dfs.block.size",
 					DEFAULT_BLOCK_SIZE);
 			buffers = new byte[group.getN()][(int)blockSize];
 			//barrier = new CyclicBarrier(nThreads);
@@ -992,6 +1016,7 @@ public class DataNode extends Configured implements InterDatanodeProtocol,
 			//reader = new BlockReader[srcs.length];
 			//exec.submit(this);
 			barrier = new CyclicBarrier(nThreads, new Runnable() {
+				@SuppressWarnings("finally")
 				public void run() {
 					try {
 						int n = group.getN();
@@ -1008,6 +1033,7 @@ public class DataNode extends Configured implements InterDatanodeProtocol,
 											new ByteArrayInputStream(buffers[idx])));
 						}
 						if (task == DatanodeProtocol.DNA_ENCODING) {
+							outstream = new DFSOutputStream[n-m];
 							DataInputStream[] fsIn = new DataInputStream[m];
 							for(int i = 0; i < m; i++)
 							{
@@ -1025,21 +1051,51 @@ public class DataNode extends Configured implements InterDatanodeProtocol,
 												new FileOutputStream(files[i])));								
 							}
 							cd.FileStreamEncode(fsIn, fsOut, (short)m,(short)(n - m));
-							exec.shutdownNow();
-							return;
+							
+							// TODO After that we should transfer the coding blocks to 
+							// corresponding targets
+							int rep = targets.length / (n - m);
+							for(int i = 0; i < (n - m); i++) {
+								// We should transfer the redundant block to the targets
+								DatanodeInfo[] tars = new DatanodeInfo[rep];
+								System.arraycopy(targets, i * rep, tars, 0, (n - m));
+								outstream[i] = new DFSClient(
+										new Configuration()).new DFSOutputStream(
+										targets[0].getName(), codingBlocks[i],
+										blockSize, BUFFER_SIZE, false, tars);
+								
+								outstream[i].write(cd.getBuffer(i), 0, (int)blockSize);								
+							}
+
+							
+							for(int i = 0; i < n; i++) {
+								if(fsInTmp[i] != null)
+									fsInTmp[i].close();
+							}
 							// encoding
 						} else {
-							//DataOutputStream fsOut = new DataOutputStream(
-									//new BufferedOutputStream(data.writeToBlock(
-											//blocks[0], false).dataOut));
-							//cd.FileStreamDecode(fsIn, fsOut, (short) m,
-									//(short) (n - m), this.index);
-							// decoding
+							outstream = new DFSOutputStream[1];
+							File file = new File(".", allBlocks[index].getBlockName());
+							DataOutputStream fsOut = new DataOutputStream(
+									 new BufferedOutputStream(
+										new FileOutputStream(file)));
+							cd.FileStreamDecode(fsInTmp, fsOut, (short) m,
+									(short) (n - m), index);
+							
+							outstream[0] = new DFSClient(
+									new Configuration()).new DFSOutputStream(
+									targets[0].getName(), allBlocks[index],
+									blockSize, BUFFER_SIZE, false, targets);
+							
+							outstream[0].write(cd.getBuffer(0), 0, (int)blockSize);	
 						}
 
 					} catch (IOException e) {
 
-					} 					
+					} finally {
+						exec.shutdownNow();
+						return;
+					}
 				}
 				
 			});
@@ -1164,8 +1220,7 @@ public class DataNode extends Configured implements InterDatanodeProtocol,
 							.getBytesPerChecksum())) {
 				String msg = "CodingDataReceiver: error in first chunk offset ("
 							 + firstChunkOffset + ") startOffset is "
-							 + startOffset;
-						
+							 + startOffset;						
 				throw new IOException(msg);
 
 			}
