@@ -1772,6 +1772,7 @@ class DFSClient implements FSConstants {
     private boolean persistBlocks = false; // persist blocks on namenode
     private int recoveryErrorCount = 0; // number of times block recovery failed
     private int maxRecoveryErrorCount = 5; // try block recovery 5 times
+    boolean isClient = true; // TODO
 
     private class Packet {
       ByteBuffer buffer;           // only one of buf and buffer is non-null
@@ -2309,6 +2310,80 @@ class DFSClient implements FSConstants {
       streamer.setDaemon(true);
       streamer.start();
     }
+    
+	// TODO If this is a request from datanode to process coding process
+	// Then we don't need to contact namenode to create a new file
+	public DFSOutputStream(String src, Block b, long blockSize, int buffersize,
+			boolean isClient, DatanodeInfo[] nodes) throws IOException {
+		super(new CRC32(), conf.getInt("io.bytes.per.checksum", 512), 4);
+		this.src = src;
+		this.block = b;
+		this.blockSize = blockSize;
+		this.isClient = isClient;
+		this.nodes = nodes;
+		
+		int bytesPerChecksum = conf.getInt("io.bytes.per.checksum", 512);
+		if (bytesPerChecksum < 1 || blockSize % bytesPerChecksum != 0) {
+			throw new IOException("io.bytes.per.checksum("
+					+ bytesPerChecksum + ") and blockSize(" + blockSize
+					+ ") do not match. " + "blockSize should be a "
+					+ "multiple of io.bytes.per.checksum");
+
+		}
+		checksum = DataChecksum.newDataChecksum(
+				DataChecksum.CHECKSUM_CRC32, bytesPerChecksum);
+		int chunkSize = bytesPerChecksum + checksum.getChecksumSize();
+		chunksPerPacket = Math.max(
+				(writePacketSize - DataNode.PKT_HEADER_LEN
+						- SIZE_OF_INTEGER + chunkSize - 1)
+						/ chunkSize, 1);
+		packetSize = DataNode.PKT_HEADER_LEN + SIZE_OF_INTEGER + chunkSize
+				* chunksPerPacket;
+		
+		streamer = new DataStreamer();
+		streamer.setDaemon(true);
+		streamer.start();
+	}
+	
+	/** TODO
+	 * This function is try to get a new block output stream.</br>
+	 * Considering while conducting a coding process, </br>the datanodeInfo
+	 * is known and should not need to contact the namenode for more
+	 * information.
+	 */
+	public boolean getBlockOutputStream(String client, DatanodeInfo[] nodes)
+			throws IOException {
+		boolean retry = false;
+		int count = conf.getInt("dfs.client.block.write.retries", 3);
+		boolean success;
+		do {
+			hasError = false;
+			errorIndex = 0;
+			retry = false;
+			success = false;
+			
+			long startTime = System.currentTimeMillis();
+			success = createBlockOutputStream(nodes, client, false);
+			if(!success) {
+				// TODO log it and try retry
+				retry = true;
+				try {
+					if (System.currentTimeMillis() - startTime > 5000) {
+						LOG.info("Waiting to find target node: "
+								+ nodes[0].getName());
+					}
+					Thread.sleep(6000);
+				} catch (InterruptedException iex) {
+				}
+			}
+				
+		} while(retry && --count >= 0);
+		
+		if(!success) {
+			throw new IOException("Unable to create new block.");
+		}
+		return success;
+	}
   
     /**
      * Open a DataOutputStream to a DataNode so that it can be written to.
