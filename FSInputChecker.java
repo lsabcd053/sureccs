@@ -26,6 +26,7 @@ import java.util.zip.Checksum;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.util.StringUtils;
+import org.apache.hadoop.dfs.Debug;
 
 /**
  * This is a generic input stream for verifying checksums for data before it is
@@ -193,16 +194,15 @@ abstract public class FSInputChecker extends FSInputStream {
 		}
 	}
 
-	/**TODO
+	/**
 	 * Actually this func is just the previous read, we add an outputStream to
-	 * test the data acceptance
+	 * test the data accept
 	 * 
-	 * @param b buffers to accept the input blocks
-	 * @param off offset of the buffers <code>b</code>
-	 * @param len Max Length to read into the buffers
-	 * @param out just for test, the output stream to recode the accept 
-	 * the blocks onto the disc
-	 * @return Totally read bytes
+	 * @param b
+	 * @param off
+	 * @param len
+	 * @param out
+	 * @return
 	 */
 	public synchronized int readCheckedBlock(byte b[], int off, int len,
 			DataOutputStream out) throws IOException {

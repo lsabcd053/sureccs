@@ -24,6 +24,8 @@ import org.apache.hadoop.dfs.DatanodeDescriptor.BlockSrcTargetPair;
 import org.apache.hadoop.dfs.DatanodeDescriptor.BlockTargetPair;
 import org.apache.hadoop.io.*;
 
+import com.sun.net.ssl.internal.ssl.Debug;
+
 abstract class DatanodeCommand implements Writable {
 	static class Register extends DatanodeCommand {
 		private Register() {
@@ -120,15 +122,17 @@ class BlockCommand extends DatanodeCommand {
 	DatanodeInfo targets[][];
 	
 	// TODO add sources here
-	DatanodeInfo sources[][];	
+	DatanodeInfo sources[][];
+	
 	RSGroup group;
 	int index;
 	// TODO
-	
-	private static final DatanodeInfo[][] EMPTY_TARGET = {};
 
 	public BlockCommand() {
 	}
+	
+
+	private static final DatanodeInfo[][] EMPTY_TARGET = {};
 
 	/**
 	 * Create BlockCommand for transferring blocks to another datanode
@@ -158,9 +162,8 @@ class BlockCommand extends DatanodeCommand {
 	 * @param blocks
 	 *            blocks to be coded
 	 */
-	BlockCommand(int action, BlockSrcTargetPair p) {
+	BlockCommand(int action, DatanodeDescriptor.BlockSrcTargetPair p) {
 		super(action);
-
 		blocks = new Block[p.blocks.length];
 		targets = new DatanodeInfo[1][];
 		sources = new DatanodeInfo[1][];
@@ -172,6 +175,7 @@ class BlockCommand extends DatanodeCommand {
 		index = p.index;
 	}
 	//TODO 
+
 
 	/**
 	 * Create BlockCommand for the given action
@@ -226,6 +230,9 @@ class BlockCommand extends DatanodeCommand {
 		for (int i = 0; i < blocks.length; i++) {
 			blocks[i].write(out);
 		}
+		
+		group.write(out);
+		out.writeInt(index);
 
 		out.writeInt(targets.length);
 		for (int i = 0; i < targets.length; i++) {
@@ -234,18 +241,32 @@ class BlockCommand extends DatanodeCommand {
 				targets[i][j].write(out);
 			}
 		}
-		
+		int brokenCount = 0;
 		// TODO sources seriable
 		out.writeInt(sources.length);
 		for (int i = 0; i < sources.length; i++) {
 			out.writeInt(sources[i].length);
 			for (int j = 0; j < sources[i].length; j++) {
-				sources[i][j].write(out);
+				//sources[i][j].write(out);
+				if(sources[i][j] == null) {
+					brokenCount++;
+				}
+			}
+			out.writeInt(brokenCount);
+			for (int j = 0; j < sources[i].length; j++) {
+				//sources[i][j].write(out);
+				if(sources[i][j] == null) {
+					out.writeInt(j);
+				}
+			}
+			
+			for (int j = 0; j < sources[i].length; j++) {
+				//sources[i][j].write(out);
+				if(sources[i][j] != null) {
+					sources[i][j].write(out);
+				}
 			}
 		}
-		group.write(out);
-		out.writeInt(index);
-		// TODO
 	}
 
 	public void readFields(DataInput in) throws IOException {
@@ -254,7 +275,10 @@ class BlockCommand extends DatanodeCommand {
 		for (int i = 0; i < blocks.length; i++) {
 			blocks[i] = new Block();
 			blocks[i].readFields(in);
-		}
+		}	
+		group = new RSGroup();
+		group.readFields(in);
+		index = in.readInt();
 
 		this.targets = new DatanodeInfo[in.readInt()][];
 		for (int i = 0; i < targets.length; i++) {
@@ -264,19 +288,33 @@ class BlockCommand extends DatanodeCommand {
 				targets[i][j].readFields(in);
 			}
 		}
-				
+		int brokenCount = 0;
+		int n = group.getN();
+		int m = group.getM();
+		int[] brokenIndex = new int[n-m];
 		// TODO sources seriable
 		this.sources = new DatanodeInfo[in.readInt()][];
 		for (int i = 0; i < sources.length; i++) {
 			this.sources[i] = new DatanodeInfo[in.readInt()];
+			brokenCount = in.readInt();
+			if(brokenCount > 0) {
+				for(int k = 0; k < brokenCount; k++){
+					brokenIndex[k] = in.readInt();
+				}
+			}		
 			for (int j = 0; j < sources[i].length; j++) {
+				int index = 0;
+				if (index < brokenCount) {
+					if (j == brokenIndex[index]) {
+						index++;
+						sources[i][j] = null;
+						continue;
+					}
+				}
 				sources[i][j] = new DatanodeInfo();
 				sources[i][j].readFields(in);
 			}
 		}
-		group = new RSGroup();
-		group.readFields(in);
-		index = in.readInt();
-		// TODO
+
 	}
 }

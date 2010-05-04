@@ -131,14 +131,13 @@ class RSGroup implements Writable{
 	 */
 	public void addBlock(BlockInfo newblock) throws IOException {
 		// TODO SUR_ECCS.log <function:"Add newBlock "+newBlock+" to group "+this.toString()>
-		FileWriter log = new FileWriter("SUR_ECCS.log", true);
 		String s = "At RSGroup.java, RSGroup.addBlock,"+
-			"<function:Add newBlock " +
-			newblock + 
-			" to group " +
-			this.toString()+">\n";
-		log.write(s);
-		log.close();
+				   "<function:Add newBlock " +
+				   newblock + 
+				   " to group " +
+				   this.toString()+">";
+		Debug.writeTime();
+		Debug.writeDebug(s);
 		
 		if (this.blocks == null) {
 			this.blocks = new BlockInfo[1];
@@ -162,6 +161,20 @@ class RSGroup implements Writable{
 	{
 		this.blocks[idx] = block;
 	}
+	
+	public boolean isGrouptheSame(RSGroup group)
+	{
+		Block[] blks = group.getBlocks();
+		if(blocks.length != blks.length)
+			return false;
+		else
+			for(int i = 0; i < blocks.length; i++){
+				if(blocks[i].getBlockId() != blks[i].getBlockId())
+					return false;
+			}
+		
+		return true;
+	}
 
 	/*
 	 * ȷ����ǰblock��group��
@@ -170,17 +183,19 @@ class RSGroup implements Writable{
 	 */
 	public int getGroupfromBlock(BlockInfo block) throws IOException {
 		// TODO SUR_ECCS.log <function:"Make sure block "+block+" is in the group "+this.toString()>
-		FileWriter log = new FileWriter("SUR_ECCS.log", true);
 		String s = "At RSGroup.java, RSGroup.getGroupfromBlock,"+
-			"<function:Make sure block " +
-			block + 
-			" is in the group " +
-			this.toString()+">\n";
-		log.write(s);
-		log.close();
+				   "<function:Make sure block " +
+				   block + 
+				   " is in the group " +
+				   this.toString()+">";
+		Debug.writeTime();
+		Debug.writeDebug(s);
 		
 		if(this.blocks == null)
+		{
+			Debug.writeDebug("This group does not have any blocks.");
 			return -1;
+		}
 		int size = this.blocks.length;
 		int i = 0;
 		for (; i < size; i++) {
@@ -192,6 +207,20 @@ class RSGroup implements Writable{
 			return -1; // That means the specified block isn't here
 		}
 		return groupID;
+	}
+	
+	public Block[] getCodingBlocks()
+	{
+		if(this.blocks.length < rsn)
+		{
+			return null;
+		}
+		Block[] cBlks = new Block[rsn-rsm];
+		for(int i = 0; i < (rsn-rsm); i++)
+		{
+			cBlks[i] = blocks[rsm+i];
+		}
+		return cBlks;
 	}
 
 	/* 

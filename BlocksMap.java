@@ -365,8 +365,24 @@ class BlocksMap {
 
   /** counts number of containing nodes. Better than using iterator. */
   int numNodes(Block b) {
+	String s = "\n*******************************************\n" +
+			   "At BlockMap.java, in the func:numNodes.";
     BlockInfo info = map.get(b);
-    return info == null ? 0 : info.numNodes();
+    //return info == null ? 0 : info.numNodes();
+    if(info == null)
+    {
+    	Debug.writeDebug(s);
+    	Debug.writeDebug("The block " + b +
+    					 "referring blockInfo is null.");
+    	return 0;
+    } else
+    {
+    	if(info.numNodes() == 0){
+    		Debug.writeDebug("The block" + b +
+    						 "does not existed in any nodes.");
+    	}
+    	return info.numNodes();
+    }
   }
 
   /** returns true if the node does not already exists and is added.

@@ -21,6 +21,7 @@ import org.apache.commons.logging.*;
 
 import org.apache.hadoop.fs.ChecksumException;
 import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.fs.FSOutputSummer;
 import org.apache.hadoop.io.IOUtils;
 import org.apache.hadoop.io.Text;
 import org.apache.hadoop.ipc.*;
@@ -35,6 +36,7 @@ import org.apache.hadoop.dfs.IncorrectVersionException;
 import org.apache.hadoop.mapred.StatusHttpServer;
 import org.apache.hadoop.dfs.BlockCommand;
 import org.apache.hadoop.dfs.DatanodeProtocol;
+import org.apache.hadoop.dfs.DFSClient;
 import org.apache.hadoop.dfs.DFSClient.BlockReader;
 import org.apache.hadoop.dfs.DFSClient.DFSOutputStream;
 import org.apache.hadoop.dfs.FSDatasetInterface.MetaDataInputStream;
@@ -872,16 +874,49 @@ public class DataNode extends Configured implements InterDatanodeProtocol,
 			//encodingBlocks(bcmd.getBlocks(), bcmd.getSources(), bcmd
 					//.getTargets(), bcmd.getGroup());
 			// TODO Should we firstly test the connection to the sources
+			String s = "At DataNode.java, in the func: processCommand.";
+			Debug.writeTime();
+			Debug.writeDebug(s);
+			Debug.writeDebug("Here is going to handle the encoding command.");
 			DatanodeInfo[] srcs = bcmd.getSources()[0];
 			DatanodeInfo[] tars = bcmd.getTargets()[0];
 			RSGroup group= bcmd.getGroup();
 			Block[] blocks = bcmd.getBlocks();
-
+			Block[] grpBlocks = group.getBlocks();
+			int rep = tars.length / blocks.length;
+			
+			Debug.writeDebug("The pre-encoding group from the command is: " + group + ";");
+			Debug.writeDebug("The redundant blocks to be encoded is:");
+			for(int i = 0; i < blocks.length; i++)
+			{
+				Debug.writeDebug(blocks[i] + ";");
+			}
+			Debug.writeDebug("We should fetch the block from the corresponding source node:");
+			for(int i = 0 ; i < srcs.length; i++)
+			{
+				Debug.writeDebug(grpBlocks[i] + " is from " + srcs[i] + ";");
+			}
+			Debug.writeDebug("The redundant blocks should be transferred to corresponding target nodes:");
+			for(int i = 0 ; i < blocks.length; i++)
+			{
+				Debug.writeDebug(blocks[i] + " is to be transferred to:");
+				for(int j = 0; j < rep; j++)
+				{
+					Debug.writeDebug(tars[j + i * rep] + ";");
+				}
+			}
+						
 			int[] NotNull = new int[group.getM()];
 			if(srcs.length != group.getM())
 			{
 				//TODO log the error: There is something wrong with the sources
 				//The number is not expected
+				Debug.writeDebug("The length of the sources " 
+								 + srcs.length 
+								 + "doesn't match the encoding param " 
+								 + group.getM()
+								 +" in the group");
+				Debug.writeDebug("Half return because of the length of sources is not expected!");
 				return false;
 			}
 			for(int i = 0; i < NotNull.length; i++)
@@ -893,26 +928,65 @@ public class DataNode extends Configured implements InterDatanodeProtocol,
 					DatanodeProtocol.DNA_ENCODING, NotNull, bcmd.getIndex());			
 			break;
 		case DatanodeProtocol.DNA_DECODING:
+			// TODO Should we firstly test the connection to the sources
+			String s1 = "At DataNode.java, in the func: processCommand.";
+			Debug.writeTime();
+			Debug.writeDebug(s1);
+			Debug.writeDebug("Here is going to handle the decoding command.");
 			DatanodeInfo[] srcs1 = bcmd.getSources()[0];
 			DatanodeInfo[] tars1 = bcmd.getTargets()[0];
 			RSGroup group1= bcmd.getGroup();
 			Block[] blocks1 = bcmd.getBlocks();
-			int index = bcmd.getIndex();			
-			int[] NotNull1 = new int[group1.getM()];
+			Block[] grpBlocks1 = group1.getBlocks();
+			int index = bcmd.getIndex();
 			int count = 0;
+			int n = group1.getN();
+			int m = group1.getM();
+			
+			Debug.writeDebug("The pre-decoding group from the command is:" + group1 + ";");
+			Debug.writeDebug("The broken block to be decoded to recover is:" + blocks1[0]);
+			
+			int[] NotNull1 = new int[m];
 			for(int i = 0; i < srcs1.length; i++)
 			{
-				if(srcs1[i] != null)
+
+				if(srcs1[i] != null) {
+					if(count < m)
+						NotNull1[count] = i;
+					else
+						break;
 					count++;
-				if(count < NotNull1.length)
-					NotNull1[count] = i;
+				}
+
 			}
-			if(count < group1.getM())
+			if(count < m)
 			{
+				Debug.writeDebug("The broken blocks are overwhelmed!" 
+						 + "The most breaks we can tolerate is " 
+						 + (group1.getN() - group1.getM())
+						 + ", while for this moment the breaks reach to " 
+						 + (group1.getN() - count)
+						 +", in this situation, we cannot recover the "
+						 +"block through decoding process!");
+				Debug.writeDebug("Half return because of failure overwhelmed!");
 				return false;
 			}
 			
-			int size1 = group1.getM();
+			Debug.writeDebug("We should fetch the block from the corresponding source node:");
+			for(int i = 0 ; i < NotNull1.length; i++)
+			{
+				int idx = NotNull1[i];
+				Debug.writeDebug("The " + idx + "th block " +
+						grpBlocks1[idx] + " is from " + srcs1[idx] + ";");
+			}
+			Debug.writeDebug("The decoded blocks should be transferred to corresponding target nodes:");
+			Debug.writeDebug(blocks1[0] + " is to be transferred to:");
+			for(int i = 0; i < tars1.length; i++)
+			{
+				Debug.writeDebug(tars1[i] + ";");
+			}
+			
+			int size1 = m;
 			new codingBlockControlor(blocks1, srcs1, tars1, group1, size1,
 					DatanodeProtocol.DNA_DECODING, NotNull1, index);			
 			break;
@@ -988,13 +1062,13 @@ public class DataNode extends Configured implements InterDatanodeProtocol,
 		int task; // Figure out if it's an encoding task or decoding task
 		int[] NotNull;
 		byte[][] buffers;
+		long blockSize;
 			
 		//BlockReader[] reader;
 		int nThreads;
 		CyclicBarrier barrier;
 		ExecutorService exec;
 		DFSOutputStream[] outstream;
-		long blockSize;
 		
 		public codingBlockControlor(Block[] blks, DatanodeInfo[] srcs, 
 				DatanodeInfo[] tars, RSGroup grp, int n, int t, int[] nn, int idx)
@@ -1016,18 +1090,22 @@ public class DataNode extends Configured implements InterDatanodeProtocol,
 			//reader = new BlockReader[srcs.length];
 			//exec.submit(this);
 			barrier = new CyclicBarrier(nThreads, new Runnable() {
-				@SuppressWarnings("finally")
 				public void run() {
-					try {
-						int n = group.getN();
-						int m = group.getM();
-						Block[] codingBlocks = group.getCodingBlocks();
-						Block[] allBlocks = group.getBlocks();
-						DataInputStream[] fsInTmp = new DataInputStream[n];
-
-						Coder cd = new Coder();
+					String s = "At DataNode.java, in the func: codingBlockControlor!";
+					Debug.writeTime();
+					Debug.writeDebug(s);
+					Debug.writeDebug("All the blockReceivers have done there job!");
+					int n = group.getN();
+					int m = group.getM();
+					Block[] codingBlocks = group.getCodingBlocks();
+					Block[] allBlocks = group.getBlocks();
+					DataInputStream[] fsInTmp = new DataInputStream[n];
+					
+					Coder cd = new Coder();
+					try {						
 						for (int i = 0; i < m; i++) {
 							int idx = NotNull[i];
+							Block b = allBlocks[idx];
 							fsInTmp[idx] = new DataInputStream(
 									new BufferedInputStream(
 											new ByteArrayInputStream(buffers[idx])));
@@ -1042,18 +1120,18 @@ public class DataNode extends Configured implements InterDatanodeProtocol,
 							
 							// TODO Just for test
 							File[] files = new File[n-m];
-							DataOutputStream[] fsOut = new DataOutputStream[n - m];
+							//DataOutputStream[] fsOut = new DataOutputStream[n - m];
 							
-							for (int i = 0; i < (n - m); i++) {
-								files[i] = new File(".", codingBlocks[i].getBlockName());
-								fsOut[i] = new DataOutputStream(
-										new BufferedOutputStream(
-												new FileOutputStream(files[i])));								
-							}
-							cd.FileStreamEncode(fsIn, fsOut, (short)m,(short)(n - m));
-							
-							// TODO After that we should transfer the coding blocks to 
-							// corresponding targets
+							//for (int i = 0; i < (n - m); i++) {
+								//files[i] = new File(".", codingBlocks[i].getBlockName());
+								//fsOut[i] = new DataOutputStream(
+											 //new BufferedOutputStream(
+												//new FileOutputStream(files[i])));								
+							//}
+
+							Debug.writeDebug("Now the encoding process is starting!");
+							cd.FileStreamEncode(fsIn, (short) m,
+									(short) (n - m));
 							int rep = targets.length / (n - m);
 							for(int i = 0; i < (n - m); i++) {
 								// We should transfer the redundant block to the targets
@@ -1067,19 +1145,15 @@ public class DataNode extends Configured implements InterDatanodeProtocol,
 								outstream[i].write(cd.getBuffer(i), 0, (int)blockSize);								
 							}
 
-							
-							for(int i = 0; i < n; i++) {
-								if(fsInTmp[i] != null)
-									fsInTmp[i].close();
-							}
-							// encoding
+							// decoding
 						} else {
 							outstream = new DFSOutputStream[1];
-							File file = new File(".", allBlocks[index].getBlockName());
-							DataOutputStream fsOut = new DataOutputStream(
-									 new BufferedOutputStream(
-										new FileOutputStream(file)));
-							cd.FileStreamDecode(fsInTmp, fsOut, (short) m,
+							//File file = new File(".", allBlocks[index].getBlockName());
+							//DataOutputStream fsOut = new DataOutputStream(
+									 //new BufferedOutputStream(
+										//new FileOutputStream(file)));
+							Debug.writeDebug("Now the decoding process is starting!");
+							cd.FileStreamDecode(fsInTmp, (short) m,
 									(short) (n - m), index);
 							
 							outstream[0] = new DFSClient(
@@ -1087,15 +1161,15 @@ public class DataNode extends Configured implements InterDatanodeProtocol,
 									targets[0].getName(), allBlocks[index],
 									blockSize, BUFFER_SIZE, false, targets);
 							
-							outstream[0].write(cd.getBuffer(0), 0, (int)blockSize);	
+							outstream[0].write(cd.getBuffer(0), 0, (int)blockSize);				
 						}
+						exec.shutdownNow();
+						return;
 
 					} catch (IOException e) {
 
-					} finally {
-						exec.shutdownNow();
-						return;
-					}
+					}	
+					
 				}
 				
 			});
@@ -1107,6 +1181,10 @@ public class DataNode extends Configured implements InterDatanodeProtocol,
 		
 		private void controlor()
 		{
+			String s = "At DataNode.java, in the func codingBlockControlor.run!";
+			Debug.writeTime();
+			Debug.writeDebug(s);
+			Debug.writeDebug("New thread created to process the coding command!");
 			int numOfCodingBlks = 0;
 			int n = group.getN();
 			int m = group.getM();
@@ -1118,14 +1196,18 @@ public class DataNode extends Configured implements InterDatanodeProtocol,
 				numOfCodingBlks = 1; // Each decoding process recovers one block
 			}
 			Block[] allBlocks = (Block[])group.getBlocks();
-			int numOfSrcToBeRead = sources.length;
 			int index;
-			for (int i = 0; i < numOfSrcToBeRead; i++) {
+			for (int i = 0; i < m; i++) {
 				index = NotNull[i];
 				String name = "Thread_" + i; 
 				exec.execute(new codingBlockReceiver(allBlocks[index],
 						sources[index], buffers[index], barrier, name));
 			}
+			// Wait for all the source blocks ready in place(the tmp file)
+			Debug.writeDebug(s);
+			Debug.writeDebug("The codingBlockControlor thread will wait until"
+					+ " all the codingBlockReceiver's jobs are done!");		
+			
 		}
 	}
 	
@@ -1172,15 +1254,23 @@ public class DataNode extends Configured implements InterDatanodeProtocol,
 		private BlockReader sendCodingRst(Block b,
 				DatanodeInfo src, long startOffset, long len,
 				int bufferSize, boolean verifyChecksum) throws IOException {
+			String s = "At DataNode.java, in the func: sendCodingRst";
+			Debug.writeTime();
+			Debug.writeDebug(s);
+			Debug.writeDebug(this.name + " try to send the coding request!");
+			//Socket sock = null;		
 			try
 			{
 				InetSocketAddress curTarget = 
 			          NetUtils.createSocketAddr(src.getName());
+				Debug.writeDebug("The target addr to get one of the source block " + 
+						b +" is " + curTarget);
 			    sock = newSocket();
 			    sock.connect(curTarget, socketTimeout);
 			    sock.setSoTimeout(socketTimeout);
 			} catch (IOException e)
 			{
+				Debug.writeDebug("IOException when try to connect to " + src);
 				sock.close();
 				return null;
 				
@@ -1192,6 +1282,7 @@ public class DataNode extends Configured implements InterDatanodeProtocol,
 			DataOutputStream out = new DataOutputStream(
 					new BufferedOutputStream(NetUtils.getOutputStream(sock,
 							WRITE_TIMEOUT)));
+			Debug.writeDebug(this.name + " write the header in order to get a block!");
 			// write the header.
 			out.writeShort(DATA_TRANSFER_VERSION);
 			out.write(OP_CODING_BLOCK);
@@ -1204,8 +1295,11 @@ public class DataNode extends Configured implements InterDatanodeProtocol,
 			DataInputStream in = new DataInputStream(
 					new BufferedInputStream(NetUtils.getInputStream(sock),
 							bufferSize));
+			Debug.writeDebug(this.name + " create a new inputstream to get blocks from " + src);
+
 			if (in.readShort() != OP_STATUS_SUCCESS) {
 				String msg = this.name + " got error in response to OP_CODING_BLOCK!";
+				Debug.writeDebug(msg);
 				throw new IOException(msg);
 			}
 			DataChecksum checksum = DataChecksum.newDataChecksum(in);
@@ -1220,10 +1314,14 @@ public class DataNode extends Configured implements InterDatanodeProtocol,
 							.getBytesPerChecksum())) {
 				String msg = "CodingDataReceiver: error in first chunk offset ("
 							 + firstChunkOffset + ") startOffset is "
-							 + startOffset;						
+							 + startOffset;
+				
+				Debug.writeDebug(msg);			
 				throw new IOException(msg);
 
 			}
+			
+			Debug.writeDebug("Create a new BlockReader to send the coding request!");
 			// Here we don't need a file name
 			return new BlockReader((String)null, b.getBlockId(), in, checksum,
 					verifyChecksum, startOffset, firstChunkOffset, sock);
@@ -1231,22 +1329,30 @@ public class DataNode extends Configured implements InterDatanodeProtocol,
 		
 		public void run()
 		{
+			String s = "At DataNode.java, in the func: codingBlockReceiver.run!";
+			Debug.writeTime();
+			Debug.writeDebug(s);
+			Debug.writeDebug("New codingBlockReceiver " + this.name + " is created!");
 			DataOutputStream out = null;
 			//FSDataset.BlockWriteStreams streams = null;
 			try{
 				//streams = data.writeToBlock(block, false, true);
-				File f = new File(".", block.getBlockName());
-				out = new DataOutputStream(
-						new BufferedOutputStream(
-								new FileOutputStream(f)));
+				//File f = new File(".", block.getBlockName());
+				//out = new DataOutputStream(
+						//new BufferedOutputStream(
+								//new FileOutputStream(f)));
 				reader = sendCodingRst(this.block, this.source, 0, -1,
 						BUFFER_SIZE, true);
 
-					//out = streams.dataOut;
-				reader.readCheckedBlock(buffer, 0, buffer.length, out);
+				// For test
+				// reader.readCheckedBlock(buffer, 0, buffer.length, out);
+				// We don't need to write to the disc
+				reader.read(buffer, 0, buffer.length);
 				
-				out.close();
+				//out.close();
 				sock.close();
+				Debug.writeDebug("The codingBlockReceiver " + this.name + " to get block:" +
+								 block + " will await the barrier.");
 				barrier.await();
 				
 			} catch(IOException e){
@@ -1530,7 +1636,11 @@ public class DataNode extends Configured implements InterDatanodeProtocol,
 			//
 			// Read in the header
 			//
+			String ds = "At DataNode.java, in the func: readBlock";
+			Debug.writeTime();
+			Debug.writeDebug(ds);
 			long blockId = in.readLong();
+			Debug.writeDebug("The block to read has the ID of " + blockId);
 			Block block = new Block(blockId, 0, in.readLong());
 
 			long startOffset = in.readLong();
@@ -3674,6 +3784,7 @@ public class DataNode extends Configured implements InterDatanodeProtocol,
 			DataNode datanode = createDataNode(args, null);
 			if (datanode != null)
 			{
+				Debug.writeDebug("****Start DataNode.................");
 				datanode.join();
 			}
 		} catch (Throwable e) {
