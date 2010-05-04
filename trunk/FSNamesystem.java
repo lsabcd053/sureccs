@@ -115,6 +115,11 @@ class FSNamesystem implements FSConstants, FSNamesystemMBean {
 	private long pendingReplicationBlocksCount = 0L,
 			underReplicatedBlocksCount = 0L,
 			scheduledReplicationBlocksCount = 0L;
+	
+	// TODO Add the under encoding task count;
+	private long pendingEncodingTasks = 0L,
+				 underEncodingTasks = 0L,
+				 scheduledEncodingTasks = 0L;
 
 	//
 	// Stores the correct file name hierarchy
@@ -197,6 +202,9 @@ class FSNamesystem implements FSConstants, FSNamesystemMBean {
 	//
 	private UnderReplicatedBlocks neededReplications = new UnderReplicatedBlocks();
 	private PendingReplicationBlocks pendingReplications;
+	
+	private UnderEncodedGroups neededEncodedGroups = new UnderEncodedGroups();
+	private PendingEncodedGroups pendingEncodings;
 
 	LeaseManager leaseManager = new LeaseManager(this);
 
@@ -239,6 +247,9 @@ class FSNamesystem implements FSConstants, FSNamesystemMBean {
 	 * Last block index used for replication work.
 	 */
 	private int replIndex = 0;
+	
+	// TODO Last group index to be processed the encoding work
+	private int encodingIndex = 0;
 
 	public static FSNamesystem fsNamesystemObject;
 	private String localMachine;
@@ -310,6 +321,8 @@ class FSNamesystem implements FSConstants, FSNamesystemMBean {
 		setBlockTotal();
 		pendingReplications = new PendingReplicationBlocks(conf.getInt(
 				"dfs.replication.pending.timeout.sec", -1) * 1000L);
+		// TODO We use the default timeout, that is 10 minutes
+		pendingEncodings = new PendingEncodedGroups();
 		this.hbthread = new Daemon(new HeartbeatMonitor());
 		this.lmthread = new Daemon(leaseManager.new Monitor());
 		this.replthread = new Daemon(new ReplicationMonitor());
@@ -492,6 +505,8 @@ class FSNamesystem implements FSConstants, FSNamesystemMBean {
 		try {
 			if (pendingReplications != null)
 				pendingReplications.stop();
+			if (pendingEncodings != null)
+				pendingEncodings.stop();
 			if (infoServer != null)
 				infoServer.stop();
 			if (hbthread != null)
@@ -1277,6 +1292,10 @@ class FSNamesystem implements FSConstants, FSNamesystemMBean {
 							.getClientMachine())));
 			return OPERATION_FAILED;
 		} else if (!checkFileProgress(pendingFile, true)) {
+			String s = "\n*******************************************\n" +
+					   "At FSNamesystem.java, in the func: completeFileInternal." +
+					   "Half return because file is still in progress.";
+			Debug.writeDebug(s);
 			return STILL_WAITING;
 		}
 
@@ -1367,10 +1386,7 @@ class FSNamesystem implements FSConstants, FSNamesystemMBean {
 					blocks[i] = new Block(FSNamesystem.randBlockId.nextLong(),
 							0, getGenerationStamp());
 				} while (isValidBlock(blocks[i]));
-
-				//System.out
-						//.println("The redundant block has been generated!!\n");
-				//Debug.writeDebug("The redundant block has been generated!!\n");
+				Debug.writeDebug("The redundant block has been generated!!\n");
 				this.blocksMap.addINode(blocks[i], filenode);
 				newCodingBlocks[i] = this.blocksMap.getStoredBlock(blocks[i]);
 				filenode.addCodingBlock(newCodingBlocks[i]);
@@ -1380,109 +1396,36 @@ class FSNamesystem implements FSConstants, FSNamesystemMBean {
 			}
 			// Initiate the encoding process automatically
 			// Next time we should make it manual
-			initiateEncodingProcess(newCodingBlocks);
+			//initiateEncodingProcess(newCodingBlocks);
 		}
 
 		// TODO Add complete
 	}
 	
 	/**
-	 * Initiate the encoding process in the selected datanode
-	 * 
-	 */
-	public void initiateEncodingProcess(Block[] blks)
-	{
-		// TODO This (n, m) should be configurable and RSn and RSm give a default value
-		int n = RSn;
-		int m = RSm;
-		int i = 0;
-		BlockInfo blkInfo = blocksMap.getStoredBlock(blks[0]);
-		if(blkInfo == null)			
-			return;	
-		int maxTargets =  maxReplicationStreams;
-		INodeFile filenode = blocksMap.getINode(blks[0]);
-		int requiredReplication = filenode.getReplication();
-		RSGroup group = null;
-		for(i = 0; i < blks.length; i++){
-			if(blks[i].couldBeCode() == 0)
-			{
-				// TODO log the failure: The specified block could not be encoded		
-				return;
-			}
-		}
-		try{
-			group = filenode.getGroupfromBlock(blkInfo);
-		}catch(IOException e){
-			return;
-			//Debug.writeDebug("In processCodingTask() in FSNamesystem.java");
-		}
-		if(group == null)
-			// TODO log the error
-			return;
-		
-		BlockInfo[] grpBlocks = group.getBlocks();
-		DatanodeDescriptor sources[] = new DatanodeDescriptor[m];
-		// Choose the sourceNode from the other blocks in the same group
-		List<DatanodeDescriptor> containingNodes = new ArrayList<DatanodeDescriptor>();
-		NumberReplicas numReplicas = new NumberReplicas();
-		
-		for(i = 0; i < m; i++)
-		{
-			sources[i] = chooseSourceDatanode(grpBlocks[i],
-					containingNodes, numReplicas);
-			if(sources[i] == null)
-			{
-				// TODO log the failure, blocks' failures block the encoding process
-				for(i  = 0; i < n; i++)
-				{
-					grpBlocks[i].setUnableToCode();
-				}
-				return;
-			}
-		}
-
-		
-		DatanodeDescriptor tar[][] = new DatanodeDescriptor[n-m][];
-		
-		for(i = 0; i < (n-m); i++)
-		{
-			tar[i] = replicator.chooseTarget(Math
-					.min(requiredReplication,maxTargets),null, new ArrayList<DatanodeDescriptor>(), 
-					null, FSConstants.DEFAULT_BLOCK_SIZE);
-			if(tar[i].length == 0)
-				return;
-		}
-		
-		// We assume that all the targets[] have the same length
-		int size = tar[0].length;
-		DatanodeDescriptor targets[] = new DatanodeDescriptor[size*(n-m)];
-		
-		// Here changes the tars to one dimension to consist with the API
-		for(i = 0; i < (n-m); i++) {
-			//size = tar[i].length;
-			for(int j = 0; j < size; j++) {
-				targets[j+i*size] = tar[i][j];
-			}
-		}
-		DatanodeDescriptor encodingNode = targets[0];
-		encodingNode.addBlockToBeEncoded(blks, sources, targets, group);
-		for(DatanodeDescriptor dn : targets) {
-			dn.incBlocksScheduled();
-		}
-	}
-
-	/**
 	 * Check that the indicated file's blocks are present and replicated. If
 	 * not, return false. If checkall is true, then check all blocks, otherwise
 	 * check only penultimate block.
 	 */
 	synchronized boolean checkFileProgress(INodeFile v, boolean checkall) {
+		
+		String s = "At FSNamesystem.java, in the func: checkFileProgress.";
+		Debug.writeTime();
+		Debug.writeDebug(s);
 		if (checkall) {
 			//
 			// check all blocks of the file.
 			//
 			for (Block block : v.getBlocks()) {
-				if (blocksMap.numNodes(block) < this.minReplication) {
+				if (blocksMap.numNodes(block) < this.minReplication) {				
+					Debug.writeDebug(s);
+					Debug.writeDebug("File is still in progress.");
+					Debug.writeDebug("Because Block " + 
+									 block +
+									 " have existed in only " +
+									 blocksMap.numNodes(block) +
+									 " nodes, which is less than the minReplication:" +
+									 this.minReplication);
 					return false;
 				}
 			}
@@ -1974,11 +1917,11 @@ class FSNamesystem implements FSConstants, FSNamesystemMBean {
 			INodeFileUnderConstruction pendingFile) throws IOException {
 		leaseManager.removeLease(pendingFile.clientName, src);
 		// TODO SUR_ECCS.log <function:"Compare the variables in INodeFileUnderConstruction and INodeFile in file "+this.toString()>
-		FileWriter log = new FileWriter("SUR_ECCS.log", true);
 		String s = "At FSNamesystem.java, FSNamesystem.finalizeINodeFileUnderConstruction,"+
 				   "<function:Compare the variables in INodeFileUnderConstruction and INodeFile" + 
-				   ">\n";
-		log.write(s);
+				   ">";
+		Debug.writeTime();
+		Debug.writeDebug(s);
 		String s_INF_UC = "In INodeFileUnderConstruction, " // + pendingFile.toString()
 						  + "\n" +
 						  "blocks = \n";
@@ -1988,11 +1931,13 @@ class FSNamesystem implements FSConstants, FSNamesystemMBean {
 		for (RSGroup r : pendingFile.getGroups())
 			s_INF_UC = s_INF_UC + r.toString() + " \n";
 		s_INF_UC = s_INF_UC + "\n" + "codingBlocks = \n";
+		if(pendingFile.getCodingBlocks() != null)
+		{
 		for (BlockInfo c : pendingFile.getCodingBlocks())
 			s_INF_UC = s_INF_UC + c.toString() + " \n";
+		}
 		s_INF_UC = s_INF_UC + "\n";
-		log.write(s_INF_UC);
-
+		Debug.writeDebug(s_INF_UC);
 
 
 		// The file is no longer pending.
@@ -2009,18 +1954,27 @@ class FSNamesystem implements FSConstants, FSNamesystemMBean {
 		for (RSGroup r : newFile.getGroups())
 			s_INF = s_INF + r.toString() + " \n";
 		s_INF = s_INF + "\n" + "codingBlocks = \n";
+		if(pendingFile.getCodingBlocks() != null)
+		{
 		for (BlockInfo c : newFile.getCodingBlocks())
 			s_INF = s_INF + c.toString() + " \n";
+		}
 		s_INF = s_INF + "\n";
-		log.write(s_INF);
-		log.close();
-		//Debug.writeDebug("In FSNamesystem.finalizeINodeFileUnderConstruction.");
+		Debug.writeDebug(s_INF);
 		dir.replaceNode(src, pendingFile, newFile);
 
 		// close file and persist block allocations for this file
 		dir.closeFile(src, newFile);
 
 		checkReplicationFactor(newFile);
+		
+		RSGroup[] groups = newFile.getGroups();
+		for(int i = 0; i < (groups.length); i++)
+		{
+			if(groups[i].getCodingBlocks()!=null)
+				//this.initiateEncodingProcess(groups[i].getCodingBlocks());
+				this.neededEncodedGroups.add(groups[i]);
+		}
 	}
 
 	synchronized void commitBlockSynchronization(Block lastblock,
@@ -2515,6 +2469,7 @@ class FSNamesystem implements FSConstants, FSNamesystemMBean {
 				try {
 					computeDatanodeWork();
 					processPendingReplications();
+					processPendingEncodings(); // TODO
 					Thread.sleep(replicationRecheckInterval);
 				} catch (InterruptedException ie) {
 					LOG.warn("ReplicationMonitor thread received InterruptedException."
@@ -2548,28 +2503,210 @@ class FSNamesystem implements FSConstants, FSNamesystemMBean {
 	int computeDatanodeWork() throws IOException {
 		int workFound = 0;
 		int blocksToProcess = 0;
+		int groupsToProcess = 0;
 		int nodesToProcess = 0;
 		// blocks should not be replicated or removed if safe mode is on
 		if (isInSafeMode())
 			return workFound;
 		synchronized (heartbeats) {
 			blocksToProcess = (int) (heartbeats.size() * ReplicationMonitor.REPLICATION_WORK_MULTIPLIER_PER_ITERATION);
+			groupsToProcess = blocksToProcess;
 			nodesToProcess = (int) Math.ceil((double) heartbeats.size()
 					* ReplicationMonitor.INVALIDATE_WORK_PCT_PER_ITERATION
 					/ 100);
 		}
+		
+		workFound = this.computeEncodingWork(groupsToProcess);
+		this.pendingEncodingTasks = pendingEncodings.size();
+		this.underEncodingTasks = neededEncodedGroups.size();
+		this.scheduledEncodingTasks = workFound;
+		
+		if (workFound == 0) {
+			workFound = computeReplicationWork(blocksToProcess);
 
-		workFound = computeReplicationWork(blocksToProcess);
-
-		// Update FSNamesystemMetrics counters
-		pendingReplicationBlocksCount = pendingReplications.size();
-		underReplicatedBlocksCount = neededReplications.size();
-		scheduledReplicationBlocksCount = workFound;
+			// Update FSNamesystemMetrics counters
+			pendingReplicationBlocksCount = pendingReplications.size();
+			underReplicatedBlocksCount = neededReplications.size();
+			scheduledReplicationBlocksCount = workFound;
+		}
 
 		if (workFound == 0)
 			workFound = computeInvalidateWork(nodesToProcess);
 		return workFound;
 	}
+	
+	private int computeEncodingWork(int groupsToProcess) {
+		int scheduledEncodingCount = 0;
+		synchronized(neededEncodedGroups){
+			groupsToProcess = Math.min(groupsToProcess, neededReplications
+					.size());
+			if (groupsToProcess == 0)
+				return scheduledEncodingCount;
+			Iterator<RSGroupW> neededEncodingsIter = neededEncodedGroups
+					.getUnderEncodedGroups().iterator();
+			
+			for(int i = 0; i < encodingIndex && neededEncodingsIter.hasNext(); i++){
+				neededEncodingsIter.next();
+			}
+			
+			for (int groupCnt = 0; groupCnt < groupsToProcess; groupCnt++) {
+				encodingIndex++;
+				if (!neededEncodingsIter.hasNext()) {
+					// start from the beginning
+					encodingIndex = 0;
+					groupsToProcess = Math.min(groupsToProcess,
+							neededReplications.size());
+					if (groupCnt >= groupsToProcess)
+						break;
+				}
+				RSGroup group = neededEncodingsIter.next().getGroup();
+				if(group != null) {
+					this.initiateEncodingProcess(group,scheduledEncodingCount);
+					
+				}			
+			}			
+		}
+		return scheduledEncodingCount;
+	}
+	
+	/**
+	 * Initiate the encoding process in the selected datanode
+	 * 
+	 */
+	public void initiateEncodingProcess(RSGroup group, int workFound)
+	{
+		// TODO This (n, m) should be configurable and RSn and RSm give a default value
+		String s = "At FSNamesystem.java, In the func: initiateEncodingProcess";
+		Debug.writeTime();
+		Debug.writeDebug(s);
+		
+		Block[] blks = group.getCodingBlocks();
+		
+		int n = RSn;
+		int m = RSm;
+		int i = 0;
+		BlockInfo blkInfo = blocksMap.getStoredBlock(blks[0]);
+		if(blkInfo == null) {
+			encodingIndex--;
+			neededEncodedGroups.remove(group, false);
+			return;	
+		}
+		int maxTargets =  maxReplicationStreams;
+		INodeFile filenode = blocksMap.getINode(blks[0]);
+		if(filenode == null){
+			encodingIndex--;
+			neededEncodedGroups.remove(group, false);
+			return;
+		}
+		int requiredReplication = filenode.getReplication();
+		for(i = 0; i < blks.length; i++){
+			if(blks[i].couldBeCode() == 0)
+			{
+				encodingIndex--;
+				neededEncodedGroups.remove(group, false);
+				Debug.writeDebug(s);
+				Debug.writeDebug("The blks cannot be encoded because non-code marked.");
+				// TODO log the failure: The specified block could not be encoded		
+				return;
+			}
+		}
+
+		if (group == null) {
+			encodingIndex--;
+			neededEncodedGroups.remove(group, false);
+			// TODO log the error
+			Debug.writeDebug("Half return because the blks-refered group is null.");
+			return;
+		} else {
+			Debug.writeDebug("The blk-refered group is " + group);
+		}
+		
+		BlockInfo[] grpBlocks = group.getBlocks();
+		
+		// For dubug
+		Debug.writeDebug(s);
+		for(i = 0; i < grpBlocks.length; i++)
+		{
+			Debug.writeDebug("The pre-encoding blocks[" + i + "] is "+grpBlocks[i]);
+		}
+		DatanodeDescriptor sources[] = new DatanodeDescriptor[m];
+		// Choose the sourceNode from the other blocks in the same group
+		List<DatanodeDescriptor> containingNodes = new ArrayList<DatanodeDescriptor>();
+		NumberReplicas numReplicas = new NumberReplicas();
+		
+		for(i = 0; i < m; i++)
+		{
+			sources[i] = chooseSourceDatanode(grpBlocks[i],
+					containingNodes, numReplicas);
+			
+			Debug.writeDebug("We get source node:" + sources[i] + " for " + grpBlocks[i]);
+			if(sources[i] == null)
+			{
+				// TODO log the failure, blocks' failures block the encoding process
+				Debug.writeDebug("Cannot get some blocks from the source node");
+				
+				for(int j = 0; j < n; j++)
+				{
+					grpBlocks[j].setUnableToCode();
+					group.setUnableToCode();
+				}
+				encodingIndex--;
+				neededEncodedGroups.remove(group, false);
+				Debug.writeDebug("Half return because could not get enough sources for encode!");
+				return;
+			}
+		}
+		
+		DatanodeDescriptor tar[][] = new DatanodeDescriptor[n-m][];
+		
+		for(i = 0; i < (n-m); i++)
+		{
+			tar[i] = replicator.chooseTarget(Math
+					.min(requiredReplication,maxTargets),null, new ArrayList<DatanodeDescriptor>(), 
+					null, FSConstants.DEFAULT_BLOCK_SIZE);
+			if(tar[i].length <= 0)
+			{
+				neededEncodedGroups.remove(group, false);
+				encodingIndex--;
+				Debug.writeDebug("Half return becaue choosing targets for the encoded blocks fails");
+				return;
+			} else
+			{
+				for (int j = 0; j < tar[i].length; j++) {
+					Debug.writeDebug("The targets chosen for "
+							+ grpBlocks[m + i] + " is " + tar[i][j]);
+				}
+			}
+		}
+		
+		//TODO We assume that all the redundant block have applied the same number of targets
+		int size = tar[0].length;	
+		DatanodeDescriptor targets[] = new DatanodeDescriptor[size*(n-m)];
+		
+		// Here changes the tars to one dimension to consist with the API
+		for(i = 0; i < (n-m); i++) {
+			//size = tar[i].length;
+			for(int j = 0; j < size; j++) {
+				targets[j+i*size] = tar[i][j];
+			}
+		}
+		DatanodeDescriptor encodingNode = targets[0];
+		Debug.writeDebug("The target datanode chosen to conduct the encoding task is "
+						+ targets[0]);
+		encodingNode.addBlockToBeEncoded(blks, sources, targets, group);
+		
+		encodingIndex--;
+		neededEncodedGroups.remove(group, false);
+		pendingEncodings.add(group, tar[0].length);
+		
+		for(DatanodeDescriptor dn : targets) {
+			workFound++;
+			dn.incBlocksScheduled();
+		}
+		
+		Debug.writeDebug("Out of the func: initiateEncodingProcess.");
+	}
+
 
 	private int computeInvalidateWork(int nodesToProcess) {
 		int blockCnt = 0;
@@ -2734,8 +2871,13 @@ class FSNamesystem implements FSConstants, FSNamesystemMBean {
 						   Iterator<Block> neededReplicationsIterator,
 						   int workFound)
 	{
+		String s = "At FSNameSystem.java, In the func: FSNameSystem.processDecodingTask";
+		Debug.writeTime();
+		Debug.writeDebug(s);
 		int i = 0;
 		int index = 0;
+		int n = RSn;
+		int m = RSm;
 		BlockInfo blkInfo = blocksMap.getStoredBlock(block);
 		if(blkInfo == null)			
 			return;					
@@ -2745,9 +2887,9 @@ class FSNamesystem implements FSConstants, FSNamesystemMBean {
 		//BlockInfo[] codingBlocks = filenode.getCodingBlocks();
 		
 		int requiredReplication = filenode.getReplication();
-		int allowDamaged = FSConstants.RSn - FSConstants.RSm;
+		int allowDamaged = n - m;
 		//int needForCoding = FSConstants.RSm;
-		int blockDamaged = 1; // We have confirmed at least one blocks to be broken
+		int blockDamaged = 0; // We have confirmed at least one blocks to be broken
 		
 		// We should first get tht source for coding
 		// Here the group should play a key role
@@ -2755,12 +2897,16 @@ class FSNamesystem implements FSConstants, FSNamesystemMBean {
 		try{
 			group = filenode.getGroupfromBlock(blkInfo);
 		}catch(IOException e){
-			//Debug.writeDebug("In processCodingTask() in FSNamesystem.java");
+			Debug.writeDebug("IOException while getting block from group.");
 		}
 		
-		if(group == null)
+		if(group == null) {
+			Debug.writeDebug("There's no group refer to the block " + block);
 			// TODO Log the error message for the block does not belong to any group
 			return;
+		} else {
+			Debug.writeDebug("The group to be got is: " + group);
+		}
 		BlockInfo[] grpBlocks = group.getBlocks();
 		int size = grpBlocks.length;
 
@@ -2773,44 +2919,23 @@ class FSNamesystem implements FSConstants, FSNamesystemMBean {
 			if(grpBlocks[i].getBlockId() == blkInfo.getBlockId()) {
 				sources[i] = null;
 				index = i;
-				continue;
+			} else {
+				sources[i] = chooseSourceDatanode(grpBlocks[i],
+								containingNodes, numReplicas);
 			}
-			sources[i] = chooseSourceDatanode(grpBlocks[i],
-							containingNodes, numReplicas);
-			if(sources[i] == null)
-			{
+			if(sources[i] == null){
 				blockDamaged++;
 			}
 		}
-		
-		// That means that the whole group could not be recovering by coding
-		// We should mark the block in the blockMaps that the block could not
-		// be coded now
-		//int blkIndex = group.getGroupId() * needForCoding;
-		//int codingBlkIndex = group.getGroupId() * allowDamaged;
-		//int numOriBlk = size - allowDamaged;
-		
-		/*
-		if(blockDamaged > allowDamaged) 
-		{
-			for(i = blkIndex; i < (blkIndex+numOriBlk) ; i++){
-				blocks[i].setUnableToCode();
-				grpBlocks[i-blkIndex].setUnableToCode();
-			}
-			for(i = codingBlkIndex; i < (codingBlkIndex+allowDamaged) ; i++){
-				codingBlocks[i].setUnableToCode();
-				grpBlocks[i-codingBlkIndex].setUnableToCode();
-			}
-			group.setUnableToCode();
-			// TODO log the error massage that is unable to recovery from coding
-			return;
-		}*/
 		if(blockDamaged > allowDamaged)
 		{
 			for(i  = 0; i < size; i++)
 			{
 				grpBlocks[i].setUnableToCode();
 			}
+			group.setUnableToCode();
+			Debug.writeDebug("Damage overwhelmed, we cannot process the decode!");
+			return;
 		}
 		DatanodeDescriptor targets[] = replicator.chooseTarget(Math
 				.min(requiredReplication,maxTargets),null, new ArrayList<DatanodeDescriptor>(), 
@@ -2981,6 +3106,21 @@ class FSNamesystem implements FSConstants, FSNamesystemMBean {
 			 * timedout, we could invoke decBlocksScheduled() on it. Its ok for
 			 * now.
 			 */
+		}
+	}
+	
+	/**TODO
+	 * Process pending encoded groups
+	 * 
+	 */
+	void processPendingEncodings(){
+		RSGroup[] timeOutGroups = pendingEncodings.getTimedOutGroups();
+		if(timeOutGroups != null){
+			synchronized(this) {
+				for(int i = 0; i < timeOutGroups.length; i++) {
+					neededEncodedGroups.add(timeOutGroups[i]);
+				}
+			}
 		}
 	}
 
@@ -3326,6 +3466,16 @@ class FSNamesystem implements FSConstants, FSNamesystemMBean {
 		if (numCurrentReplica >= fileReplication) {
 			neededReplications.remove(block, numCurrentReplica,
 					num.decommissionedReplicas, fileReplication);
+			// TODO
+			RSGroup group = null;
+			try {
+				group = fileINode.getGroupfromBlock(storedBlock);
+			} catch(IOException e) {
+				// Log the exception
+			}
+			if(group!=null){
+				neededEncodedGroups.remove(group, true);
+			}
 		} else {
 			updateNeededReplications(block, curReplicaDelta, 0);
 		}
@@ -3668,6 +3818,13 @@ class FSNamesystem implements FSConstants, FSNamesystemMBean {
 		// Modify the blocks->datanode map and node's map.
 		// 
 		pendingReplications.remove(block);
+		BlockInfo storedBlock = blocksMap.getStoredBlock(block);
+		INodeFile filenode = storedBlock.getINode();
+		if(filenode != null) {
+			RSGroup group = filenode.getGroupfromBlock(storedBlock);
+			if(group != null)
+				pendingEncodings.remove(group);
+		}
 		addStoredBlock(block, node, delHintNode);
 	}
 
@@ -4789,6 +4946,19 @@ class FSNamesystem implements FSConstants, FSNamesystemMBean {
 
 	public long getScheduledReplicationBlocks() {
 		return scheduledReplicationBlocksCount;
+	}
+	
+	// TODO
+	public long getPendingEncodingTasks(){
+		return this.pendingEncodingTasks;
+	}
+	
+	public long getUnderEncodingTasks(){
+		return this.underEncodingTasks;
+	}
+	
+	public long getScheduledEncodingTasks(){
+		return this.scheduledEncodingTasks;
 	}
 
 	public String getFSState() {

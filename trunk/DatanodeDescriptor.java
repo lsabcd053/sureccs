@@ -74,7 +74,35 @@ public class DatanodeDescriptor extends DatanodeInfo {
 			this.index = idx; 
 			this.group = grp;
 		}
+		
+		// This 5 simple get function is used for debut log
+		
+		public Block[] getBlocks()
+		{
+			return blocks;
+		}
+		
+		public DatanodeDescriptor[] getSources()
+		{
+			return sources;
+		}
+
+		public DatanodeDescriptor[] getTargets()
+		{
+			return targets;
+		}
+		
+		public RSGroup getGroup()
+		{
+			return group;
+		}
+		
+		public int getIdx()
+		{
+			return index;
+		}
 	}
+	
 
 	/** A BlockTargetPair queue. */
 	private static class BlockQueue {
@@ -156,7 +184,7 @@ public class DatanodeDescriptor extends DatanodeInfo {
 
 	/*
 	 * Variables for maintaning number of blocks scheduled to be written to this
-	 * datanode. This count is approximate and might be slightly higger in case
+	 * datanode. This count is approximate and might be slightly higher in case
 	 * of errors (e.g. datanode does not report if an error occurs while writing
 	 * the block).
 	 */
@@ -358,9 +386,8 @@ public class DatanodeDescriptor extends DatanodeInfo {
 	void addBlockToBeDecoded(Block block, DatanodeDescriptor[] srcs, DatanodeDescriptor[] targets, int idx, RSGroup grp) {
 		assert (block != null && srcs != null && srcs.length > 0&& targets != null && targets.length > 0
 				  && idx >= 0 && idx < srcs.length);
-		Block blocks[] = new Block[2];
+		Block blocks[] = new Block[1];
 		blocks[0] = block;
-		blocks[1] = (Block)null; // This is useless just for API consistence
 		decodingBlocks.offer(blocks, srcs, targets, idx, grp);
 	}
 	//TODO
@@ -443,15 +470,90 @@ public class DatanodeDescriptor extends DatanodeInfo {
 	// TODO return coding command 
 	// Each time we only conduct an encoding/decoding command
 	BlockCommand getEncodingCommand() {
-		BlockSrcTargetPair p = encodingBlocks.poll();
-		return p == null ? null : new BlockCommand(
-				DatanodeProtocol.DNA_ENCODING, p, 0);
+		
+		BlockSrcTargetPair p  = encodingBlocks.poll();		
+		if(p == null)
+		{
+			//Debug.writeDebug("Half return because there are no encoding tasks");
+			return null;
+		}
+		
+		String s = "At DatanodeDescriptor.java, in the func: getEncodingCommand";
+		Debug.writeTime();
+		Debug.writeDebug(s);
+		
+		DatanodeDescriptor[] sources = p.getSources();
+		DatanodeDescriptor[] targets = p.getTargets();
+		RSGroup group = p.getGroup();
+		Block[] blks = p.getBlocks();
+		
+		int rep = targets.length / blks.length; // The replication num
+		
+		Debug.writeDebug(s);
+		Debug.writeDebug("We get a new encoding command:");
+		Debug.writeDebug("The pre-encoding group is:" + group + ";");
+		Debug.writeDebug("The Blocks to be encoded is:");
+		for(int i = 0; i < blks.length; i++)
+		{
+			Debug.writeDebug(blks[i] + ";");
+		}
+		Debug.writeDebug("The sources come from:");
+		for(int i = 0; i < sources.length; i++)
+		{
+			Debug.writeDebug("Source " + i + ": " + sources[i]);
+		}
+		Debug.writeDebug("The targets go to:");
+		for(int i = 0; i < blks.length; i++)
+		{
+			Debug.writeDebug("The targets for " + blks[i] + " is:");
+			for(int j = 0; j < rep; j++)
+			{
+				Debug.writeDebug(targets[j + i * rep] + ";");
+			}
+		}
+		BlockCommand cmd = new BlockCommand(DatanodeProtocol.DNA_ENCODING, p);
+		return cmd == null ? null : cmd;
 	}
 	
-	BlockCommand getDecodingCommand() {
-		BlockSrcTargetPair p = decodingBlocks.poll();
-		return p == null ? null : new BlockCommand(
-				DatanodeProtocol.DNA_DECODING, p, 0);
+	BlockCommand getDecodingCommand() {	
+		BlockSrcTargetPair p = decodingBlocks.poll();	
+		if(p == null)
+		{
+			//Debug.writeDebug("Half return because there are no decoding tasks");
+			return null;
+		}
+
+		String s = "At DatanodeDescriptor.java, in the func: getDecodingCommand.";
+		Debug.writeTime();
+		Debug.writeDebug(s);
+		
+		DatanodeDescriptor[] sources = p.getSources();
+		DatanodeDescriptor[] targets = p.getTargets();
+		RSGroup group = p.getGroup();
+		Block[] blks = p.getBlocks();
+		Block[] grpBlks = group.getBlocks();
+		
+		Debug.writeDebug(s);
+		Debug.writeDebug("We get a new decoding command!");	
+		Debug.writeDebug("The pre-decoding group is:" + group + ";");
+		Debug.writeDebug("The Blocks to be decoded to recover is:" + blks[0] + ";");
+
+		Debug.writeDebug("The sources come from:");
+		for(int i = 0; i < sources.length; i++)
+		{
+			if(sources[i] != null)
+				Debug.writeDebug("Source " + i + " to get blocks:" 
+						+ grpBlks[i] + ": " + sources[i]);
+		}
+
+		Debug.writeDebug("The targets for recovered block " + blks[0] + " is:");
+		for(int i = 0; i < targets.length; i++)
+		{
+				Debug.writeDebug(targets[i] + ";");
+		}
+		
+		BlockCommand cmd = new BlockCommand(DatanodeProtocol.DNA_DECODING, p);
+		return cmd == null ? null : cmd;
 	}
 	//TODO
 

@@ -86,8 +86,14 @@ class UnderReplicatedBlocks implements Iterable<Block> {
 				return 0;
 			}
 			// TODO add the ability to be coded when all the replicas are broken
-			else if (block.couldBeCode() == 1)
+			else if (block.couldBeCode() == 1) {
+				String s = "At UnderReplicatedBlock.java, In the func: getPriority!";
+				Debug.writeTime();
+				Debug.writeDebug(s);
+				Debug.writeDebug("Though there is no other replicas, current block can  " +
+						         "be recovered through decoding process!");
 				return 0;
+			}
 			return LEVEL; // no need to replicate
 		} else if (curReplicas == 1) {
 			return 0; // highest priority

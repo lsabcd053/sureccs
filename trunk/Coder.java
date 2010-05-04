@@ -17,10 +17,11 @@
  */
 package org.apache.hadoop.dfs;
 
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.dfs.FSConstants;
+
 import java.io.*;
 import java.security.*;
-
-import org.apache.hadoop.conf.Configuration;
 
 /**
  * @author robeen
@@ -30,26 +31,24 @@ import org.apache.hadoop.conf.Configuration;
 
 class Coder {
 	RSCoder m_rs;
-	static int buffer_size = FSConstants.BUFFER_SIZE; // Default buffer 4096B
+	int buffer_size = FSConstants.BUFFER_SIZE; 
 	//int tail_size = 36;
 	byte[][] buf;
-	long blockSize;
-
+	Configuration conf = new Configuration();
+	long blockSize = conf.getLong("dfs.block.size",
+			FSConstants.DEFAULT_BLOCK_SIZE);
 	public Coder() {
 		m_rs = new RSCoder();
 		RSCoder.setup_tables();
-		RSCoder.CalculateValue();
-		Configuration conf = new Configuration();
-		blockSize = conf.getLong("dfs.block.size",
-				FSConstants.DEFAULT_BLOCK_SIZE);
+		RSCoder.CalculateValue();	
 	}
 	
-	public byte[] getBuffer(int idx)
-	{
+	public byte[] getBuffer(int idx) {
 		assert(idx >= 0 && idx < buf.length);
 		return buf[idx];
+		
 	}
-
+	
 	//public byte[] CreateFileDigest(String fileName) throws IOException {
 		//return FileMD5.getFileMD5String(fileName);
 	//}
@@ -66,22 +65,26 @@ class Coder {
 	 * @throws IOException 
  	 */
 	public void FileStreamEncode(DataInputStream[] fsIn,
-			DataOutputStream[] fsOut, short tCut, short tMore) throws IOException {
+			/*DataOutputStream[] fsOut,*/ short tCut, short tMore) throws IOException {
 		// Just for test, we set the tCut and tMore here
 		//short tCut = (short) fsIn.length;
 		//short tMore = (short) fsOut.length;
-		if(fsIn.length != tCut || fsOut.length != tMore)
+		if(fsIn.length != tCut)
 		{
 			// TODO Set up an error log: Get a bad input stream
 			return;
 		}
 		buf = new byte[tMore][(int)blockSize];
-		ByteArrayOutputStream[] bufferOut = new ByteArrayOutputStream[tMore];
 		byte[][] buffers = new byte[tCut][buffer_size];
 		byte[] temp;	
 		short[][] InputBytes = new short[tCut + tMore][];		
 		m_rs.InitialCauchyMatrix(tCut, tMore);
 		int count = 1;
+		ByteArrayOutputStream[] bufferOut = new ByteArrayOutputStream[tMore];
+		for(int i = 0; i < tMore; i++)
+		{
+			bufferOut[i] = new ByteArrayOutputStream();
+		}
 		while (true) {			
 			for (int i = 0; i < tCut && count > 0; i++)		
 			{
@@ -103,11 +106,10 @@ class Coder {
 			}
 			m_rs.RSEncode(InputBytes, tMore);
 			temp = new byte[count];
-			for (int i = 0; i < tMore; i++) {
-				bufferOut[i] = new ByteArrayOutputStream();
+			for (int i = 0; i < tMore; i++) {				
 				for (int k = 0; k < count; k++)
 					temp[k] = (byte) InputBytes[i+tCut][k];
-				fsOut[i].write(temp, 0, count);
+				//fsOut[i].write(temp, 0, count); // For test
 				bufferOut[i].write(temp, 0, count);
 			}
 			
@@ -115,11 +117,12 @@ class Coder {
 				break;
 
 		}
+		
 		for (int i = 0; i < tCut; i++) {
 			fsIn[i].close();
 		}
 		for (int i = 0; i < tMore; i++) {
-			fsOut[i].close();
+			//fsOut[i].close();
 			buf[i] = bufferOut[i].toByteArray();
 			bufferOut[i].close();
 		}
@@ -148,7 +151,7 @@ class Coder {
 					new FileOutputStream(sFile + ".RS_" + j)));
 		}
 
-		FileStreamEncode(fsIn, fsOut, tCut, tMore);
+		//FileStreamEncode(fsIn, fsOut, tCut, tMore);
 		return true;
 	}
 		
@@ -163,22 +166,22 @@ class Coder {
 	 * @throws IOException 
  	 */ 
 	public void FileStreamDecode(DataInputStream[] fsIn,
-			DataOutputStream fsOut, short tCut, short tMore, int index) throws IOException
+			/*DataOutputStream fsOut,*/ short tCut, short tMore, int index) throws IOException
 	{	
 		//short tMore = (short) (fsIn.length - tCut);
 		if(fsIn.length != tCut + tMore){
 			//TODO Set up an error log: Get a bad Inputstream
 			return;
-		}
+		}		
 		if(!(index >= 0&& index < tCut + tMore)){
 			//TODO Set up an error log: Get a bad index-reference to the broken block
 			return;
 		}
-		short[] NotNull = new short[tCut];
-		byte[][] buffers = new byte[tCut][buffer_size];		
-		int count = 0;
-		buf = new byte[1][(int) blockSize];
+		short[] NotNull = new short[tCut];	
+		buf = new byte[1][(int)blockSize];
+		byte[][] buffers = new byte[tCut][buffer_size];
 		ByteArrayOutputStream bufferOut = new ByteArrayOutputStream();
+		int count = 0;
 		for (short i = 0; i < fsIn.length&&count<tCut; i++)
 			if (fsIn[i] != null) {
 				NotNull[count] = i;		
@@ -214,15 +217,15 @@ class Coder {
 			m_rs.RSDecode(InputBytes, tCut, tMore,index);           
 			for (int k = 0; k < count; k++)
 				buffers[index][k] = (byte)InputBytes[index][k];
-			fsOut.write(buffers[index],0,count);
-			bufferOut.write(buffers[index],0,count);
+			//fsOut.write(buffers[index],0,count);
+			bufferOut.write(buffers[index], 0, count);
 			if(count < buffer_size)
 				break;
 		}
 		for (int i = 0; i < fsIn.length; i++)
 			if(fsIn[i]!=null)
 			  fsIn[i].close();
-		fsOut.close();
+		//fsOut.close();
 		buf[0] = bufferOut.toByteArray();
 		bufferOut.close();
 	}
@@ -262,7 +265,7 @@ class Coder {
 		
 		DataOutputStream fsOut = new DataOutputStream(new BufferedOutputStream(
 				new FileOutputStream(sFile + ".RS_" + index)));;
-		FileStreamDecode(fsIn, fsOut,(short)tCut, (short)tMore, index);
+		//FileStreamDecode(fsIn, fsOut,(short)tCut, (short)tMore, index);
 		return true;
 	}	
 }

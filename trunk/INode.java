@@ -865,10 +865,10 @@ class INodeFile extends INode {
 	
 	// TODO Important!! This construct method will support the convert between
 	// INodeFile and INodeFileUnderConstruction
-	INodeFile(PermissionStatus permissions, int nrBlocks, int nrGroups,
-			int nrCodedBlocks, short replication,
+	INodeFile(PermissionStatus permissions, int nrBlocks, int nrCodedBlocks,
+			RSGroup[] groups, short replication,
 			long modificationTime, long preferredBlockSize, int n, int m) {
-		this(permissions, new BlockInfo[nrBlocks], new RSGroup[nrGroups],
+		this(permissions, new BlockInfo[nrBlocks], groups,
 				new BlockInfo[nrCodedBlocks], replication,
 				modificationTime, preferredBlockSize, n, m);
 	}
@@ -952,22 +952,6 @@ class INodeFile extends INode {
 	public RSGroup[] getGroups() {
 		return this.groups;
 	}
-
-	// For test
-	/* Never Needed
-	public String getGroupContents() {
-		int grpSize = this.groups.length;
-		String rValue = this.toString() + ":\n";
-		if (grpSize == 0)
-			return (String) null;
-		else {
-			for (int i = 0; i < grpSize; i++) {
-				rValue += this.groups[i] + "\n";
-			}
-			return rValue;
-		}
-	}
-	*/
 	
 	/*
 	 * Function Name: addGroup
@@ -976,15 +960,13 @@ class INodeFile extends INode {
 	 */
 	public void addGroup(RSGroup newGroup) throws IOException {
 		// TODO SUR_ECCS.log <function:"Add newGroup "+newGroup+" to file "+this.toString()>
-		FileWriter log = new FileWriter("SUR_ECCS.log", true);
 		String s = "At INode.java, INodeFile.addGroup,"+
 				   "<function:Add newGroup " +
 				   newGroup + 
 				   " to file " +
-				   this.toString()+">\n";
-		log.write(s);
-		log.close();
-		//Debug.writeDebug("In addGroup in INode.java");
+				   this.toString()+">";
+		Debug.writeTime();
+		Debug.writeDebug(s);
 		
 		if (this.groups == null) {
 			this.groups = new RSGroup[1];
@@ -1017,15 +999,14 @@ class INodeFile extends INode {
 	 */
 	void addCodingBlock(BlockInfo newblock) throws IOException {
 		// TODO SUR_ECCS.log <function:"Add new redundant block "+newBlock+" to file "+this.toString()>
-		FileWriter log = new FileWriter("SUR_ECCS.log", true);
 		String s = "At INode.java, INodeFile.addCodingBlock,"+
 				   "<function:Add new redundant block " +
 				   newblock + 
 				   " to file " +
-				   this.toString()+">\n";
-		log.write(s);
-		log.close();
-		
+				   this.toString()+">";
+		Debug.writeTime();
+		Debug.writeDebug(s);
+	
 		if (this.codingBlocks == null) {
 			this.codingBlocks = new BlockInfo[1];
 			this.codingBlocks[0] = newblock;
@@ -1046,7 +1027,7 @@ class INodeFile extends INode {
 		return this.codingBlocks;
 	}
 
-	void setCodingBlock(int idx, BlockInfo blk) {
+	void setCodingBlocks(int idx, BlockInfo blk) {
 		this.codingBlocks[idx] = blk;
 		int numCodingBlock = (RSn - RSm);
 		int grpIndex = (int) (idx / numCodingBlock);
@@ -1065,25 +1046,13 @@ class INodeFile extends INode {
 				break;
 		}
 		if (i == size){
-			FileWriter errLog = new FileWriter("SUR_ECCS_Err.log", true);
-			String s = "At INode.java, INodeFile.getGroupfromBlock,"+
-					   "<function:Could not find block " +
-					   block + 
-					   " at any group.>\n";
-			errLog.write(s);
-			errLog.close();
+			String s = "<Could not find block " +
+					   block + " at any group.>";
+			Debug.writeDebug(s);
 			return (RSGroup) null;
 		}
 		else
 		{
-			FileWriter log = new FileWriter("SUR_ECCS.log", true);
-			String s = "At INode.java, INodeFile.getGroupfromBlock,"+
-					   "<function:Fine block " +
-					   block + 
-					   " in group " +
-					   groups[i]+">\n";
-			log.write(s);
-			log.close();
 			return groups[i];
 		}
 	}
@@ -1096,14 +1065,14 @@ class INodeFile extends INode {
 	 */
 	void addBlock(BlockInfo newblock, int n, int m) throws IOException {
 		// TODO SUR_ECCS.log <function:"Add new block "+newBlock+" to file "+this.toString()>
-		FileWriter log = new FileWriter("SUR_ECCS.log", true);
 		String s = "At INode.java, INodeFile.addBlock,"+
 				   "<function:Add new block " +
 				   newblock + 
 				   " to file " +
-				   this.toString()+">\n";
-		log.write(s);
-		log.close();
+				   this.toString()+">";
+		Debug.writeTime();
+		Debug.writeDebug(s);
+
 		// TODO m should be revise to be configurable	
 		int size = 0;
 		int grpSize = this.getGroupSize();
