@@ -1971,9 +1971,11 @@ class FSNamesystem implements FSConstants, FSNamesystemMBean {
 		RSGroup[] groups = newFile.getGroups();
 		for(int i = 0; i < (groups.length); i++)
 		{
-			if(groups[i].getCodingBlocks()!=null)
+			if(groups[i].getCodingBlocks()!=null){
 				//this.initiateEncodingProcess(groups[i].getCodingBlocks());
+				groups[i].finish(); // Finish the grouping process
 				this.neededEncodedGroups.add(groups[i]);
+			}
 		}
 	}
 
@@ -2538,7 +2540,7 @@ class FSNamesystem implements FSConstants, FSNamesystemMBean {
 	private int computeEncodingWork(int groupsToProcess) {
 		int scheduledEncodingCount = 0;
 		synchronized(neededEncodedGroups){
-			groupsToProcess = Math.min(groupsToProcess, neededReplications
+			groupsToProcess = Math.min(groupsToProcess, neededEncodedGroups
 					.size());
 			if (groupsToProcess == 0)
 				return scheduledEncodingCount;
@@ -2563,7 +2565,7 @@ class FSNamesystem implements FSConstants, FSNamesystemMBean {
 				if(group != null) {
 					this.initiateEncodingProcess(group,scheduledEncodingCount);
 					
-				}			
+				}
 			}			
 		}
 		return scheduledEncodingCount;
@@ -2580,6 +2582,14 @@ class FSNamesystem implements FSConstants, FSNamesystemMBean {
 		Debug.writeTime();
 		Debug.writeDebug(s);
 		
+
+		if (group == null) {
+			encodingIndex--;
+			neededEncodedGroups.remove(group, false);
+			// TODO log the error
+			Debug.writeDebug("Half return because the blks-refered group is null.");
+			return;
+		}	
 		Block[] blks = group.getCodingBlocks();
 		
 		int n = RSn;
@@ -2611,15 +2621,6 @@ class FSNamesystem implements FSConstants, FSNamesystemMBean {
 			}
 		}
 
-		if (group == null) {
-			encodingIndex--;
-			neededEncodedGroups.remove(group, false);
-			// TODO log the error
-			Debug.writeDebug("Half return because the blks-refered group is null.");
-			return;
-		} else {
-			Debug.writeDebug("The blk-refered group is " + group);
-		}
 		
 		BlockInfo[] grpBlocks = group.getBlocks();
 		
@@ -3818,6 +3819,7 @@ class FSNamesystem implements FSConstants, FSNamesystemMBean {
 		// Modify the blocks->datanode map and node's map.
 		// 
 		pendingReplications.remove(block);
+		// TODO
 		BlockInfo storedBlock = blocksMap.getStoredBlock(block);
 		INodeFile filenode = storedBlock.getINode();
 		if(filenode != null) {

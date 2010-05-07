@@ -78,6 +78,13 @@ class PendingEncodedGroups {
 			}
 		}
 	}
+	
+	boolean contains(RSGroup group){
+		if(group == null)
+			return false;
+		else
+			return this.pendingEncodedGroups.contains(group);
+	}
 
 	/**
 	 * One replication request for this block has finished. Decrement the number
@@ -85,27 +92,31 @@ class PendingEncodedGroups {
 	 */
 	void remove(RSGroup group) {
 		int completeCount = 0;
-		int red = group.getN() - group.getM();
-		Block[] cBlocks = group.getCodingBlocks();
-		PendingBlockInfo[] found = new PendingBlockInfo[cBlocks.length];
-		synchronized (pendingEncodedGroups) {
-			for (int i = 0; i < cBlocks.length; i++) {
-				synchronized (pendingReplications) {
-					found[i] = pendingReplications.get(cBlocks[i]);
-					if (found[i] != null) {
-						found[i].decrementReplicas();
-						if (found[i].getNumReplicas() <= 0) {
-							// pendingReplications.remove(block);
-							completeCount++;
+		if (group.isComplete()) {
+			if (this.contains(group)) {
+				int red = group.getN() - group.getM();
+				Block[] cBlocks = group.getCodingBlocks();
+				PendingBlockInfo[] found = new PendingBlockInfo[cBlocks.length];
+				synchronized (pendingEncodedGroups) {
+					for (int i = 0; i < cBlocks.length; i++) {
+						synchronized (pendingReplications) {
+							found[i] = pendingReplications.get(cBlocks[i]);
+							if (found[i] != null) {
+								found[i].decrementReplicas();
+								if (found[i].getNumReplicas() <= 0) {
+									// pendingReplications.remove(block);
+									completeCount++;
+								}
+							}
 						}
 					}
-				}
-			}
-			if (completeCount == red) {
-				pendingEncodedGroups.remove(group);
-				for (int i = 0; i < cBlocks.length; i++) {
-					synchronized (pendingReplications) {
-						pendingReplications.remove(cBlocks[i]);
+					if (completeCount == red) {
+						pendingEncodedGroups.remove(group);
+						for (int i = 0; i < cBlocks.length; i++) {
+							synchronized (pendingReplications) {
+								pendingReplications.remove(cBlocks[i]);
+							}
+						}
 					}
 				}
 			}
@@ -171,6 +182,9 @@ class PendingEncodedGroups {
 		 * Iterate through all items and detect timed-out items
 		 */
 		void pendingEncodingGroupsCheck() {
+			Debug.writeTime();
+			String s = "At PendingEncodedGroups.java, in the func: PendingEncodingGroupsCheck.";
+			Debug.writeDebug(s);
 			synchronized (pendingEncodedGroups) {
 				Iterator iter = pendingEncodedGroups.iterator();
 				long now = FSNamesystem.now();
@@ -179,6 +193,7 @@ class PendingEncodedGroups {
 				while (iter.hasNext()) {
 					// Map.Entry entry = (Map.Entry) iter.next();
 					RSGroup group = (RSGroup) iter.next();
+					Debug.writeDebug("The group:" + group + " is in the pending encoding list!");
 					Block[] blocks = group.getCodingBlocks();
 					PendingBlockInfo[] pendingBlock = new PendingBlockInfo[blocks.length];
 					for (int i = 0; i < blocks.length; i++) {
