@@ -45,6 +45,7 @@ class RSGroup implements Writable{
 	// TODO Add groupid here
 	private int rsn;
 	private int rsm;
+	private long lastBlockBytes;
 	private int couldBeCoded; // This could be used to verify that if it has the
 	private boolean complete; // Verify if the grouping process ended
 
@@ -63,6 +64,7 @@ class RSGroup implements Writable{
 		out.writeBoolean(complete);
 		out.writeInt(rsn);
 		out.writeInt(rsm);
+		out.writeLong(lastBlockBytes);
 		out.writeInt(blocks.length);
 		for(int i = 0; i < blocks.length; i++)
 		{
@@ -77,6 +79,7 @@ class RSGroup implements Writable{
 		this.complete = in.readBoolean();
 		this.rsn = in.readInt();
 		this.rsm = in.readInt();
+		this.lastBlockBytes = in.readLong();
 		this.blocks = new BlockInfo[in.readInt()];
 		for(int i = 0; i < blocks.length; i++)
 		{
@@ -94,6 +97,7 @@ class RSGroup implements Writable{
 		blocks = null;
 		couldBeCoded = 1;
 		complete = false;
+		lastBlockBytes = FSConstants.DEFAULT_BLOCK_SIZE;
 		rsn = FSConstants.RSn;
 		rsm = FSConstants.RSm;
 	}
@@ -135,6 +139,28 @@ class RSGroup implements Writable{
 	
 	public void finish(){
 		complete = true;
+	}
+	
+	public long getLastBlockSize(){
+		return lastBlockBytes;
+	}
+	
+	public void setLastBlockSize(long size){
+		lastBlockBytes = size;
+	}
+	
+	public boolean isLastBlock(Block block){
+		int i = 0;
+		for(i = 0; i < blocks.length; i++){
+			if(blocks[i].getBlockId() == block.getBlockId()){
+				break;
+			}
+		}
+		if(i == (blocks.length - (rsn - rsm) - 1)){
+			return true;
+		} else {
+			return false;
+		}
 	}
 
 	/**
@@ -221,16 +247,17 @@ class RSGroup implements Writable{
 		return groupID;
 	}
 	
-	public Block[] getCodingBlocks()
+	public BlockInfo[] getCodingBlocks()
 	{
-		if(this.blocks.length < rsn)
-		{
+		int red = rsn - rsm;
+		int numBlocks = blocks.length;
+		if(numBlocks <= red || !this.complete){
 			return null;
 		}
-		Block[] cBlks = new Block[rsn-rsm];
-		for(int i = 0; i < (rsn-rsm); i++)
+		BlockInfo[] cBlks = new BlockInfo[red];
+		for(int i = (numBlocks - red); i < (numBlocks); i++)
 		{
-			cBlks[i] = blocks[rsm+i];
+			cBlks[i - (numBlocks - red)] = blocks[i];
 		}
 		return cBlks;
 	}
@@ -244,17 +271,17 @@ class RSGroup implements Writable{
 	public String getGroupName() {
 		String rValue = ("grp_" + String.valueOf(groupID));
 		int size = this.blocks.length;
-		rValue += ":(";
+		rValue += "{ ";
 		for (int i = 0; i < size; i++) {
 			rValue += this.blocks[i];
-			rValue += ",";
+			rValue += ",      \n";
 		}
-		rValue += ")";
+		rValue += "}";
 		return rValue;
 	}
 
 	public String toString() {
-		return "grp_" + String.valueOf(groupID);
+		return getGroupName();
 	}
 
 	public int getBlockSize() {
