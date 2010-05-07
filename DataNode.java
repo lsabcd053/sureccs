@@ -18,7 +18,6 @@
 package org.apache.hadoop.dfs;
 
 import org.apache.commons.logging.*;
-
 import org.apache.hadoop.fs.ChecksumException;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.FSOutputSummer;
@@ -923,7 +922,7 @@ public class DataNode extends Configured implements InterDatanodeProtocol,
 			{
 				NotNull[i] = i;
 			}
-			int size = group.getM();
+			int size = grpBlocks.length - blocks.length;
 			new codingBlockControlor(blocks, srcs, tars, group, size,
 					DatanodeProtocol.DNA_ENCODING, NotNull, bcmd.getIndex());			
 			break;
@@ -957,7 +956,6 @@ public class DataNode extends Configured implements InterDatanodeProtocol,
 						break;
 					count++;
 				}
-
 			}
 			if(count < m)
 			{
@@ -985,7 +983,7 @@ public class DataNode extends Configured implements InterDatanodeProtocol,
 			{
 				Debug.writeDebug(tars1[i] + ";");
 			}
-			
+					
 			int size1 = m;
 			new codingBlockControlor(blocks1, srcs1, tars1, group1, size1,
 					DatanodeProtocol.DNA_DECODING, NotNull1, index);			
@@ -1062,7 +1060,6 @@ public class DataNode extends Configured implements InterDatanodeProtocol,
 		int task; // Figure out if it's an encoding task or decoding task
 		int[] NotNull;
 		byte[][] buffers;
-		long blockSize;
 			
 		//BlockReader[] reader;
 		int nThreads;
@@ -1081,10 +1078,7 @@ public class DataNode extends Configured implements InterDatanodeProtocol,
 			this.task = t;
 			this.NotNull = nn;
 			this.index = idx;
-			Configuration conf = new Configuration();
-			blockSize = conf.getLong("dfs.block.size",
-					DEFAULT_BLOCK_SIZE);
-			buffers = new byte[group.getN()][(int)blockSize];
+			buffers = new byte[group.getN()][(int)estimateBlockSize];
 			//barrier = new CyclicBarrier(nThreads);
 			exec = Executors.newFixedThreadPool(nThreads);
 			//reader = new BlockReader[srcs.length];
@@ -1105,7 +1099,7 @@ public class DataNode extends Configured implements InterDatanodeProtocol,
 					try {						
 						for (int i = 0; i < m; i++) {
 							int idx = NotNull[i];
-							Block b = allBlocks[idx];
+							//Block b = allBlocks[idx];
 							fsInTmp[idx] = new DataInputStream(
 									new BufferedInputStream(
 											new ByteArrayInputStream(buffers[idx])));
@@ -1119,7 +1113,7 @@ public class DataNode extends Configured implements InterDatanodeProtocol,
 							}
 							
 							// TODO Just for test
-							File[] files = new File[n-m];
+							//File[] files = new File[n-m];
 							//DataOutputStream[] fsOut = new DataOutputStream[n - m];
 							
 							//for (int i = 0; i < (n - m); i++) {
@@ -1140,9 +1134,9 @@ public class DataNode extends Configured implements InterDatanodeProtocol,
 								outstream[i] = new DFSClient(
 										new Configuration()).new DFSOutputStream(
 										targets[0].getName(), codingBlocks[i],
-										blockSize, BUFFER_SIZE, false, tars);
+										estimateBlockSize, BUFFER_SIZE, false, tars);
 								
-								outstream[i].write(cd.getBuffer(i), 0, (int)blockSize);								
+								outstream[i].write(cd.getBuffer(i), 0, (int)estimateBlockSize);								
 							}
 
 							// decoding
@@ -1159,9 +1153,10 @@ public class DataNode extends Configured implements InterDatanodeProtocol,
 							outstream[0] = new DFSClient(
 									new Configuration()).new DFSOutputStream(
 									targets[0].getName(), allBlocks[index],
-									blockSize, BUFFER_SIZE, false, targets);
-							
-							outstream[0].write(cd.getBuffer(0), 0, (int)blockSize);				
+									estimateBlockSize, BUFFER_SIZE, false, targets);
+							int realSize = (group.getLastBlockSize() != 0) ? (int)group.getLastBlockSize(): 
+								 				(int)estimateBlockSize;
+							outstream[0].write(cd.getBuffer(0), 0, realSize);				
 						}
 						exec.shutdownNow();
 						return;
@@ -1197,7 +1192,7 @@ public class DataNode extends Configured implements InterDatanodeProtocol,
 			}
 			Block[] allBlocks = (Block[])group.getBlocks();
 			int index;
-			for (int i = 0; i < m; i++) {
+			for (int i = 0; i < this.nThreads; i++) {
 				index = NotNull[i];
 				String name = "Thread_" + i; 
 				exec.execute(new codingBlockReceiver(allBlocks[index],

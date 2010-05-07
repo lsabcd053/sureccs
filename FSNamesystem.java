@@ -1300,6 +1300,17 @@ class FSNamesystem implements FSConstants, FSNamesystemMBean {
 		}
 
 		finalizeINodeFileUnderConstruction(src, pendingFile);
+		
+		RSGroup[] groups = pendingFile.getGroups();
+		int numBlocksInFile = pendingFile.getBlockSize();
+		this.addCodingBlockToGroup(pendingFile, numBlocksInFile);
+		
+		for(int i = 0; i < (groups.length); i++)
+		{
+			if(groups[i].getCodingBlocks() != null){
+				this.neededEncodedGroups.add(groups[i]);
+			}
+		}
 
 		if (NameNode.stateChangeLog.isDebugEnabled()) {
 			NameNode.stateChangeLog.debug("DIR* NameSystem.completeFile: "
@@ -1381,7 +1392,7 @@ class FSNamesystem implements FSConstants, FSNamesystemMBean {
 			return;
 		
 		if (blkSize != 0) { // When there is no block yet
-			for (int i = 0; i < (n -m); i++) {
+			for (int i = 0; i < (n - m); i++) {
 				do {
 					blocks[i] = new Block(FSNamesystem.randBlockId.nextLong(),
 							0, getGenerationStamp());
@@ -1390,15 +1401,10 @@ class FSNamesystem implements FSConstants, FSNamesystemMBean {
 				this.blocksMap.addINode(blocks[i], filenode);
 				newCodingBlocks[i] = this.blocksMap.getStoredBlock(blocks[i]);
 				filenode.addCodingBlock(newCodingBlocks[i]);
-				// add replication task to needReplication list
-				//this.neededReplications.add(blocks[i], 0, 0, filenode
-						//.getReplication());
 			}
-			// Initiate the encoding process automatically
-			// Next time we should make it manual
-			//initiateEncodingProcess(newCodingBlocks);
 		}
-
+		
+		lastGroup.finish();
 		// TODO Add complete
 	}
 	
@@ -1968,15 +1974,6 @@ class FSNamesystem implements FSConstants, FSNamesystemMBean {
 
 		checkReplicationFactor(newFile);
 		
-		RSGroup[] groups = newFile.getGroups();
-		for(int i = 0; i < (groups.length); i++)
-		{
-			if(groups[i].getCodingBlocks()!=null){
-				//this.initiateEncodingProcess(groups[i].getCodingBlocks());
-				groups[i].finish(); // Finish the grouping process
-				this.neededEncodedGroups.add(groups[i]);
-			}
-		}
 	}
 
 	synchronized void commitBlockSynchronization(Block lastblock,
@@ -2582,14 +2579,13 @@ class FSNamesystem implements FSConstants, FSNamesystemMBean {
 		Debug.writeTime();
 		Debug.writeDebug(s);
 		
-
 		if (group == null) {
 			encodingIndex--;
 			neededEncodedGroups.remove(group, false);
 			// TODO log the error
 			Debug.writeDebug("Half return because the blks-refered group is null.");
 			return;
-		}	
+		}
 		Block[] blks = group.getCodingBlocks();
 		
 		int n = RSn;
@@ -2623,6 +2619,7 @@ class FSNamesystem implements FSConstants, FSNamesystemMBean {
 
 		
 		BlockInfo[] grpBlocks = group.getBlocks();
+		int numRealSources = grpBlocks.length - blks.length; 
 		
 		// For dubug
 		Debug.writeDebug(s);
@@ -2637,24 +2634,31 @@ class FSNamesystem implements FSConstants, FSNamesystemMBean {
 		
 		for(i = 0; i < m; i++)
 		{
-			sources[i] = chooseSourceDatanode(grpBlocks[i],
-					containingNodes, numReplicas);
-			
-			Debug.writeDebug("We get source node:" + sources[i] + " for " + grpBlocks[i]);
-			if(sources[i] == null)
-			{
-				// TODO log the failure, blocks' failures block the encoding process
-				Debug.writeDebug("Cannot get some blocks from the source node");
-				
-				for(int j = 0; j < n; j++)
-				{
-					grpBlocks[j].setUnableToCode();
-					group.setUnableToCode();
+			if (i < numRealSources) {
+				sources[i] = chooseSourceDatanode(grpBlocks[i],
+						containingNodes, numReplicas);
+
+				Debug.writeDebug("We get source node:" + sources[i] + " for "
+						+ grpBlocks[i]);
+				if (sources[i] == null) {
+					// TODO log the failure, blocks' failures block the encoding
+					// process
+					Debug
+							.writeDebug("Cannot get some blocks from the source node");
+
+					for (int j = 0; j < n; j++) {
+						grpBlocks[j].setUnableToCode();
+						group.setUnableToCode();
+					}
+					encodingIndex--;
+					neededEncodedGroups.remove(group, false);
+					Debug
+							.writeDebug("Half return because could not get enough sources for encode!");
+					return;
 				}
-				encodingIndex--;
-				neededEncodedGroups.remove(group, false);
-				Debug.writeDebug("Half return because could not get enough sources for encode!");
-				return;
+			} else {
+				sources[i] = (DatanodeDescriptor) new DatanodeInfo(null, null,
+						"NullForCoding");
 			}
 		}
 		
@@ -2906,10 +2910,12 @@ class FSNamesystem implements FSConstants, FSNamesystemMBean {
 			// TODO Log the error message for the block does not belong to any group
 			return;
 		} else {
-			Debug.writeDebug("The group to be got is: " + group);
+			Debug.writeDebug("The group to process decoding task is:\n" + group);
 		}
 		BlockInfo[] grpBlocks = group.getBlocks();
+		BlockInfo[] cBlocks = group.getCodingBlocks();
 		int size = grpBlocks.length;
+		int numRealSources = size - cBlocks.length;
 
 		DatanodeDescriptor sources[] = new DatanodeDescriptor[size];
 		// Choose the sourceNode from the other blocks in the same group
@@ -2917,15 +2923,20 @@ class FSNamesystem implements FSConstants, FSNamesystemMBean {
 		NumberReplicas numReplicas = new NumberReplicas();
 		
 		for(i = 0; i < size ; i++){
-			if(grpBlocks[i].getBlockId() == blkInfo.getBlockId()) {
-				sources[i] = null;
-				index = i;
+			if (i < numRealSources) {
+				if (grpBlocks[i].getBlockId() == blkInfo.getBlockId()) {
+					sources[i] = null;
+					index = i;
+				} else {
+					sources[i] = chooseSourceDatanode(grpBlocks[i],
+							containingNodes, numReplicas);
+				}
+				if (sources[i] == null) {
+					blockDamaged++;
+				}
 			} else {
-				sources[i] = chooseSourceDatanode(grpBlocks[i],
-								containingNodes, numReplicas);
-			}
-			if(sources[i] == null){
-				blockDamaged++;
+				sources[i] = (DatanodeDescriptor) new DatanodeInfo(null, null,
+						"NullForCoding");
 			}
 		}
 		if(blockDamaged > allowDamaged)
@@ -3337,6 +3348,19 @@ class FSNamesystem implements FSConstants, FSNamesystemMBean {
 					+ " But it does not belong to any file.");
 			// we could add this block to invalidate set of this datanode.
 			// it will happen in next block report otherwise.
+			INodeFile filenode = this.blocksMap.getINode(block);
+			if(filenode != null){
+				try{
+					RSGroup group = filenode.getGroupfromBlock(storedBlock);
+					if(group != null){
+						if(group.isLastBlock(block)){
+							group.setLastBlockSize(block.getNumBytes());
+						}
+					}
+				} catch(IOException e) {
+					
+				}
+			}
 			return block;
 		}
 
