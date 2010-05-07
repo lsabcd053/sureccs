@@ -29,7 +29,7 @@ class RSGroupW {
 	
 	public RSGroupW(RSGroup grp) {
 		group = grp;
-		red = grp.getN() - grp.getM();
+		red = grp.getN() - grp.getM() - 1;
 	}
 	
 	public void reduce()
@@ -90,7 +90,7 @@ class UnderEncodedGroups{
 	synchronized void remove(RSGroup group, boolean encoding) {
 		RSGroupW grpw = this.contains(group);
 		if(grpw != null){
-			if (!encoding) {
+			if (encoding) {
 				if (grpw.getRed() > 0)
 					grpw.reduce();
 				else

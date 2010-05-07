@@ -46,6 +46,7 @@ class RSGroup implements Writable{
 	private int rsn;
 	private int rsm;
 	private int couldBeCoded; // This could be used to verify that if it has the
+	private boolean complete; // Verify if the grouping process ended
 
 	// ability to recover when all the replicas are broken,
 	// That is the code ability
@@ -59,6 +60,7 @@ class RSGroup implements Writable{
 		out.writeInt(groupID);
 		out.writeInt(szGroup);
 		out.writeInt(couldBeCoded);
+		out.writeBoolean(complete);
 		out.writeInt(rsn);
 		out.writeInt(rsm);
 		out.writeInt(blocks.length);
@@ -72,6 +74,7 @@ class RSGroup implements Writable{
 		this.groupID = in.readInt();
 		this.szGroup = in.readInt();
 		this.couldBeCoded = in.readInt();
+		this.complete = in.readBoolean();
 		this.rsn = in.readInt();
 		this.rsm = in.readInt();
 		this.blocks = new BlockInfo[in.readInt()];
@@ -90,6 +93,7 @@ class RSGroup implements Writable{
 		szGroup = 0;
 		blocks = null;
 		couldBeCoded = 1;
+		complete = false;
 		rsn = FSConstants.RSn;
 		rsm = FSConstants.RSm;
 	}
@@ -123,6 +127,14 @@ class RSGroup implements Writable{
 	public int getM()
 	{
 		return rsm;
+	}
+	
+	public boolean isComplete(){
+		return complete;
+	}
+	
+	public void finish(){
+		complete = true;
 	}
 
 	/**
