@@ -946,12 +946,17 @@ public class DataNode extends Configured implements InterDatanodeProtocol,
 			Debug.writeDebug("The broken block to be decoded to recover is:" + blocks1[0]);
 			
 			int[] NotNull1 = new int[m];
+			int size1 = 0;
 			for(int i = 0; i < srcs1.length; i++)
 			{
 
-				if(srcs1[i] != null) {
-					if(count < m)
+				if(srcs1[i] != null) {				
+					if(count < m){
 						NotNull1[count] = i;
+						if(srcs1[i].getName() != "NullForCode"){
+							size1++;
+						}
+					}
 					else
 						break;
 					count++;
@@ -984,7 +989,6 @@ public class DataNode extends Configured implements InterDatanodeProtocol,
 				Debug.writeDebug(tars1[i] + ";");
 			}
 					
-			int size1 = m;
 			new codingBlockControlor(blocks1, srcs1, tars1, group1, size1,
 					DatanodeProtocol.DNA_DECODING, NotNull1, index);			
 			break;
@@ -1180,23 +1184,16 @@ public class DataNode extends Configured implements InterDatanodeProtocol,
 			Debug.writeTime();
 			Debug.writeDebug(s);
 			Debug.writeDebug("New thread created to process the coding command!");
-			int numOfCodingBlks = 0;
-			int n = group.getN();
 			int m = group.getM();
-			if(this.task == DatanodeProtocol.DNA_ENCODING)
-			{
-				numOfCodingBlks = blocks.length;
-			} else
-			{
-				numOfCodingBlks = 1; // Each decoding process recovers one block
-			}
 			Block[] allBlocks = (Block[])group.getBlocks();
 			int index;
-			for (int i = 0; i < this.nThreads; i++) {
+			for (int i = 0; i < m; i++) {
 				index = NotNull[i];
-				String name = "Thread_" + i; 
-				exec.execute(new codingBlockReceiver(allBlocks[index],
-						sources[index], buffers[index], barrier, name));
+				if (sources[index].getName() != "NullForCode") {
+					String name = "Thread_" + i;
+					exec.execute(new codingBlockReceiver(allBlocks[index],
+							sources[index], buffers[index], barrier, name));
+				}
 			}
 			// Wait for all the source blocks ready in place(the tmp file)
 			Debug.writeDebug(s);
@@ -1328,7 +1325,7 @@ public class DataNode extends Configured implements InterDatanodeProtocol,
 			Debug.writeTime();
 			Debug.writeDebug(s);
 			Debug.writeDebug("New codingBlockReceiver " + this.name + " is created!");
-			DataOutputStream out = null;
+			//DataOutputStream out = null;
 			//FSDataset.BlockWriteStreams streams = null;
 			try{
 				//streams = data.writeToBlock(block, false, true);
