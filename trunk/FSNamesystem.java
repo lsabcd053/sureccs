@@ -1308,6 +1308,13 @@ class FSNamesystem implements FSConstants, FSNamesystemMBean {
 		for(int i = 0; i < (groups.length); i++)
 		{
 			if(groups[i].getCodingBlocks() != null){
+				if(i != 0){
+					try {
+						Thread.sleep(60*1000);
+					} catch(InterruptedException e) {
+						
+					}
+				}
 				this.neededEncodedGroups.add(groups[i]);
 			}
 		}
@@ -2586,7 +2593,8 @@ class FSNamesystem implements FSConstants, FSNamesystemMBean {
 			Debug.writeDebug("Half return because the blks-refered group is null.");
 			return;
 		}
-		Block[] blks = group.getCodingBlocks();
+		Block[] blks = group.getCodingBlocks();		
+		assert(blks != null);
 		
 		int n = RSn;
 		int m = RSm;
@@ -2622,7 +2630,6 @@ class FSNamesystem implements FSConstants, FSNamesystemMBean {
 		int numRealSources = grpBlocks.length - blks.length; 
 		
 		// For dubug
-		Debug.writeDebug(s);
 		for(i = 0; i < grpBlocks.length; i++)
 		{
 			Debug.writeDebug("The pre-encoding blocks[" + i + "] is "+grpBlocks[i]);
@@ -2643,8 +2650,7 @@ class FSNamesystem implements FSConstants, FSNamesystemMBean {
 				if (sources[i] == null) {
 					// TODO log the failure, blocks' failures block the encoding
 					// process
-					Debug
-							.writeDebug("Cannot get some blocks from the source node");
+					Debug.writeDebug("Cannot get some blocks from the source node");
 
 					for (int j = 0; j < n; j++) {
 						grpBlocks[j].setUnableToCode();
@@ -2652,13 +2658,12 @@ class FSNamesystem implements FSConstants, FSNamesystemMBean {
 					}
 					encodingIndex--;
 					neededEncodedGroups.remove(group, false);
-					Debug
-							.writeDebug("Half return because could not get enough sources for encode!");
+					Debug.writeDebug("Half return because could not get enough sources for encode!");
 					return;
 				}
 			} else {
-				sources[i] = (DatanodeDescriptor) new DatanodeInfo(null, null,
-						"NullForCoding");
+				sources[i] = (DatanodeDescriptor) 
+					(new DatanodeID("NullForCode", null, 0, 0));				
 			}
 		}
 		
@@ -2675,13 +2680,13 @@ class FSNamesystem implements FSConstants, FSNamesystemMBean {
 				encodingIndex--;
 				Debug.writeDebug("Half return becaue choosing targets for the encoded blocks fails");
 				return;
-			} else
-			{
-				for (int j = 0; j < tar[i].length; j++) {
-					Debug.writeDebug("The targets chosen for "
-							+ grpBlocks[m + i] + " is " + tar[i][j]);
-				}
-			}
+			} //else
+			//{
+				//for (int j = 0; j < tar[i].length; j++) {
+					//Debug.writeDebug("The targets chosen for "
+							//+ grpBlocks[m + i] + " is " + tar[i][j]);
+				//}
+			//}
 		}
 		
 		//TODO We assume that all the redundant block have applied the same number of targets
@@ -2935,8 +2940,8 @@ class FSNamesystem implements FSConstants, FSNamesystemMBean {
 					blockDamaged++;
 				}
 			} else {
-				sources[i] = (DatanodeDescriptor) new DatanodeInfo(null, null,
-						"NullForCoding");
+				sources[i] = (DatanodeDescriptor) new DatanodeID("NullForCode", null,
+						0, 0);
 			}
 		}
 		if(blockDamaged > allowDamaged)

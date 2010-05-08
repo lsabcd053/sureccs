@@ -251,7 +251,7 @@ class RSGroup implements Writable{
 	{
 		int red = rsn - rsm;
 		int numBlocks = blocks.length;
-		if(numBlocks <= red || !this.complete){
+		if(numBlocks <= red || !this.complete || red == 0){
 			return null;
 		}
 		BlockInfo[] cBlks = new BlockInfo[red];
