@@ -883,6 +883,7 @@ public class DataNode extends Configured implements InterDatanodeProtocol,
 			Block[] blocks = bcmd.getBlocks();
 			Block[] grpBlocks = group.getBlocks();
 			int rep = tars.length / blocks.length;
+			int size = group.getNumOfRealBlocks();
 			
 			Debug.writeDebug("The pre-encoding group from the command is: " + group + ";");
 			Debug.writeDebug("The redundant blocks to be encoded is:");
@@ -891,7 +892,7 @@ public class DataNode extends Configured implements InterDatanodeProtocol,
 				Debug.writeDebug(blocks[i] + ";");
 			}
 			Debug.writeDebug("We should fetch the block from the corresponding source node:");
-			for(int i = 0 ; i < srcs.length; i++)
+			for(int i = 0 ; i < size; i++)
 			{
 				Debug.writeDebug(grpBlocks[i] + " is from " + srcs[i] + ";");
 			}
@@ -922,7 +923,7 @@ public class DataNode extends Configured implements InterDatanodeProtocol,
 			{
 				NotNull[i] = i;
 			}
-			int size = grpBlocks.length - blocks.length;
+			
 			new codingBlockControlor(blocks, srcs, tars, group, size,
 					DatanodeProtocol.DNA_ENCODING, NotNull, bcmd.getIndex());			
 			break;
@@ -953,7 +954,7 @@ public class DataNode extends Configured implements InterDatanodeProtocol,
 				if(srcs1[i] != null) {				
 					if(count < m){
 						NotNull1[count] = i;
-						if(srcs1[i].getName() != "NullForCode"){
+						if(grpBlocks1[i].getBlockId() != 0){
 							size1++;
 						}
 					}
@@ -962,6 +963,13 @@ public class DataNode extends Configured implements InterDatanodeProtocol,
 					count++;
 				}
 			}
+			Debug.writeDebug("We must create " + size1 + " threads to get blocks!");
+			Debug.writeDebug("The NotNull Array is:");
+			for(int i = 0; i < m; i++){
+				Debug.writeDebug(NotNull1[i] + ";");
+			
+			}
+			
 			if(count < m)
 			{
 				Debug.writeDebug("The broken blocks are overwhelmed!" 
@@ -976,11 +984,10 @@ public class DataNode extends Configured implements InterDatanodeProtocol,
 			}
 			
 			Debug.writeDebug("We should fetch the block from the corresponding source node:");
-			for(int i = 0 ; i < NotNull1.length; i++)
-			{
+			for (int i = 0; i < NotNull1.length; i++) {
 				int idx = NotNull1[i];
-				Debug.writeDebug("The " + idx + "th block " +
-						grpBlocks1[idx] + " is from " + srcs1[idx] + ";");
+				Debug.writeDebug("The " + idx + "th block " + grpBlocks1[idx]
+						+ " is from " + srcs1[idx] + ";");
 			}
 			Debug.writeDebug("The decoded blocks should be transferred to corresponding target nodes:");
 			Debug.writeDebug(blocks1[0] + " is to be transferred to:");
@@ -1153,14 +1160,19 @@ public class DataNode extends Configured implements InterDatanodeProtocol,
 							Debug.writeDebug("Now the decoding process is starting!");
 							cd.FileStreamDecode(fsInTmp, (short) m,
 									(short) (n - m), index);
+
+							long realBlockSize = (allBlocks[index].getNumBytes() == 0) ? estimateBlockSize
+									: allBlocks[index].getNumBytes();
 							
-							outstream[0] = new DFSClient(
-									new Configuration()).new DFSOutputStream(
-									targets[0].getName(), allBlocks[index],
-									estimateBlockSize, BUFFER_SIZE, false, targets);
-							int realSize = (group.getLastBlockSize() != 0) ? (int)group.getLastBlockSize(): 
-								 				(int)estimateBlockSize;
-							outstream[0].write(cd.getBuffer(0), 0, realSize);				
+							Debug.writeDebug("Current block has the size of "
+									+ allBlocks[index].getNumBytes());
+							
+							outstream[0] = new DFSClient(new Configuration()).new DFSOutputStream(
+									targets[0].getName(), allBlocks[index], realBlockSize,
+									BUFFER_SIZE, false, targets);
+							
+							//Debug.writeDebug("The real size of this block is " + realSize);
+							outstream[0].write(cd.getBuffer(0), 0, (int)realBlockSize);				
 						}
 						exec.shutdownNow();
 						return;
@@ -1189,7 +1201,7 @@ public class DataNode extends Configured implements InterDatanodeProtocol,
 			int index;
 			for (int i = 0; i < m; i++) {
 				index = NotNull[i];
-				if (sources[index].getName() != "NullForCode") {
+				if (allBlocks[index].getBlockId() != 0) {
 					String name = "Thread_" + i;
 					exec.execute(new codingBlockReceiver(allBlocks[index],
 							sources[index], buffers[index], barrier, name));

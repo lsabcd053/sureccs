@@ -48,6 +48,7 @@ class RSGroup implements Writable{
 	private long lastBlockBytes;
 	private int couldBeCoded; // This could be used to verify that if it has the
 	private boolean complete; // Verify if the grouping process ended
+	private int numOfRealBlocks;
 
 	// ability to recover when all the replicas are broken,
 	// That is the code ability
@@ -64,7 +65,7 @@ class RSGroup implements Writable{
 		out.writeBoolean(complete);
 		out.writeInt(rsn);
 		out.writeInt(rsm);
-		out.writeLong(lastBlockBytes);
+		out.writeInt(numOfRealBlocks);
 		out.writeInt(blocks.length);
 		for(int i = 0; i < blocks.length; i++)
 		{
@@ -79,7 +80,7 @@ class RSGroup implements Writable{
 		this.complete = in.readBoolean();
 		this.rsn = in.readInt();
 		this.rsm = in.readInt();
-		this.lastBlockBytes = in.readLong();
+		this.numOfRealBlocks = in.readInt();
 		this.blocks = new BlockInfo[in.readInt()];
 		for(int i = 0; i < blocks.length; i++)
 		{
@@ -97,9 +98,9 @@ class RSGroup implements Writable{
 		blocks = null;
 		couldBeCoded = 1;
 		complete = false;
-		lastBlockBytes = FSConstants.DEFAULT_BLOCK_SIZE;
 		rsn = FSConstants.RSn;
 		rsm = FSConstants.RSm;
+		numOfRealBlocks = 0;
 	}
 
 	public RSGroup(int gID, int size, int n, int m) {
@@ -141,12 +142,12 @@ class RSGroup implements Writable{
 		complete = true;
 	}
 	
-	public long getLastBlockSize(){
-		return lastBlockBytes;
+	public int getNumOfRealBlocks(){
+		return numOfRealBlocks;
 	}
 	
-	public void setLastBlockSize(long size){
-		lastBlockBytes = size;
+	public void setNumOfRealBlocks(int num){
+		numOfRealBlocks = num;
 	}
 	
 	public boolean isLastBlock(Block block){
@@ -156,10 +157,13 @@ class RSGroup implements Writable{
 				break;
 			}
 		}
-		if(i == (blocks.length - (rsn - rsm) - 1)){
-			return true;
+		if(i == rsm - 1){
+			return true; // Reach the real end of the initial group
 		} else {
-			return false;
+			if(blocks[i+1].getBlockId() == 0)
+				return true; // Or the next block is a dirty block
+			else
+				return false;
 		}
 	}
 
@@ -221,13 +225,13 @@ class RSGroup implements Writable{
 	 */
 	public int getGroupfromBlock(BlockInfo block) throws IOException {
 		// TODO SUR_ECCS.log <function:"Make sure block "+block+" is in the group "+this.toString()>
-		String s = "At RSGroup.java, RSGroup.getGroupfromBlock,"+
-				   "<function:Make sure block " +
-				   block + 
-				   " is in the group " +
-				   this.toString()+">";
-		Debug.writeTime();
-		Debug.writeDebug(s);
+		//String s = "At RSGroup.java, RSGroup.getGroupfromBlock,"+
+				  // "<function:Make sure block " +
+				   //block + 
+				   //" is in the group " +
+				  // this.toString()+">";
+		//Debug.writeTime();
+		//Debug.writeDebug(s);
 		
 		if(this.blocks == null)
 		{
@@ -281,7 +285,7 @@ class RSGroup implements Writable{
 	}
 
 	public String toString() {
-		return getGroupName();
+		return ("grp_" + String.valueOf(groupID));
 	}
 
 	public int getBlockSize() {
