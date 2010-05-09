@@ -36,6 +36,7 @@ import org.apache.hadoop.io.WritableUtils;
  * stored persistently in the fsImage.
  **************************************************/
 public class DatanodeDescriptor extends DatanodeInfo {
+	
 	/** Block and targets pair */
 	static class BlockTargetPair {
 		final Block block;
@@ -489,7 +490,6 @@ public class DatanodeDescriptor extends DatanodeInfo {
 		
 		int rep = targets.length / blks.length; // The replication num
 		
-		Debug.writeDebug(s);
 		Debug.writeDebug("We get a new encoding command:");
 		Debug.writeDebug("The pre-encoding group is:" + group + ";");
 		Debug.writeDebug("The Blocks to be encoded is:");
@@ -532,8 +532,7 @@ public class DatanodeDescriptor extends DatanodeInfo {
 		RSGroup group = p.getGroup();
 		Block[] blks = p.getBlocks();
 		Block[] grpBlks = group.getBlocks();
-		
-		Debug.writeDebug(s);
+
 		Debug.writeDebug("We get a new decoding command!");	
 		Debug.writeDebug("The pre-decoding group is:" + group + ";");
 		Debug.writeDebug("The Blocks to be decoded to recover is:" + blks[0] + ";");
@@ -541,9 +540,13 @@ public class DatanodeDescriptor extends DatanodeInfo {
 		Debug.writeDebug("The sources come from:");
 		for(int i = 0; i < sources.length; i++)
 		{
-			if(sources[i] != null)
-				Debug.writeDebug("Source " + i + " to get blocks:" 
-						+ grpBlks[i] + ": " + sources[i]);
+			if (sources[i] != null){
+				if (sources[i].getName() != "NullForCode")
+					Debug.writeDebug("Source " + i + " to get blocks:"
+							+ grpBlks[i] + ": " + sources[i]);
+				else
+					break;
+			}
 		}
 
 		Debug.writeDebug("The targets for recovered block " + blks[0] + " is:");
