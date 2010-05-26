@@ -805,21 +805,41 @@ class FSImage extends Storage {
 				// I don't know what is the version meaningful
 				// I default version the newest, and do the 
 				// newest-version handling
+				/*
 				int numCBlocks = in.readInt();
-				Block cBlocks[] = new Block[numCBlocks];
-				for (int j = 0; j < numCBlocks; j++) {
-					cBlocks[j] = new Block();
-					cBlocks[j].readFields(in);
+				Block cBlocks[] = null;
+				
+				if ((-9 <= imgVersion && numCBlocks > 0)
+						|| (imgVersion < -9 && numCBlocks >= 0)) {
+					cBlocks = new Block[numCBlocks];
+					for (int j = 0; j < numCBlocks; j++) {
+						cBlocks[j] = new Block();
+						if (-14 < imgVersion) {
+							cBlocks[j].set(in.readLong(), in.readLong(),
+									Block.GRANDFATHER_GENERATION_STAMP);
+						} else {
+							cBlocks[j].readFields(in);		
+						}
+						if(cBlocks[j].getNumBytes() != fsNamesys.getDefaultBlockSize()){
+							cBlocks[j].setNumBytes(fsNamesys.getDefaultBlockSize());
+						}
+					}
 				}
 
 				int numGroups = in.readInt();
+				Debug.writeTime();
+				Debug.writeDebug("At FSImage.java, in the func: loadFSImage.");
+				Debug.writeDebug("This time we got a group with a length of " + numGroups);
 				RSGroup groups[] = new RSGroup[numGroups];
 				for (int j = 0; j < numGroups; j++) {
 					groups[j].readFields(in);
-				}
-				// TODO
+				}			
 				int n = in.readInt();
 				int m = in.readInt();
+				Debug.writeDebug("This time we got a RSn of " + n);
+				Debug.writeDebug("This time we got a RSm of " + m);
+				*/
+				// TODO
 
 				// get quota only when the node is a directory
 				long quota = -1L;
@@ -847,8 +867,11 @@ class FSImage extends Storage {
 				}
 				// add new inode
 				parentINode = fsDir.addToParent(path, parentINode, permissions,
-						blocks, cBlocks, groups, replication, modificationTime,
-						quota, blockSize, n, m);
+						blocks, replication, modificationTime,
+						quota, blockSize);
+				//parentINode = fsDir.addToParent(path, parentINode, permissions,
+						//blocks, cBlocks, groups, replication, modificationTime,
+						//quota, blockSize, n, m);
 			}
 
 			// load datanode info
@@ -1012,7 +1035,8 @@ class FSImage extends Storage {
 			out.writeInt(blocks.length);
 			for (Block blk : blocks)
 				blk.write(out);
-
+			
+			/* TODO
 			// TODO put the coded blocks onto the out stream
 			Block[] cBlocks = fileINode.getCodingBlocks();
 			out.write(cBlocks.length);
@@ -1027,6 +1051,7 @@ class FSImage extends Storage {
 
 			out.writeInt(fileINode.RSn);
 			out.writeInt(fileINode.RSm);
+			*/
 
 			FILE_PERM.fromShort(fileINode.getFsPermissionShort());
 			PermissionStatus.write(out, fileINode.getUserName(), fileINode

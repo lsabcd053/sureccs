@@ -165,18 +165,18 @@ class FSDirectory implements FSConstants, Closeable {
 	/**
    */
 	INode unprotectedAddFile(String path, PermissionStatus permissions,
-			Block[] blocks, Block[] cBlocks, RSGroup[] groups, 
+			Block[] blocks, //Block[] cBlocks, RSGroup[] groups, 
 			short replication, long modificationTime,
-			long preferredBlockSize, int n, int m) {
+			long preferredBlockSize /*, int n, int m*/) {
 		INode newNode;
 		if (blocks == null)
 			newNode = new INodeDirectory(permissions, modificationTime);
-		else if(cBlocks == null)
+		else //if(cBlocks == null)
 			newNode = new INodeFile(permissions, blocks.length, replication,
 					modificationTime, preferredBlockSize);
-		else // TODO
-			newNode = new INodeFile(permissions, blocks.length, cBlocks.length,
-					groups, replication, modificationTime, preferredBlockSize, n, m);
+		//else // TODO
+			//newNode = new INodeFile(permissions, blocks.length, cBlocks.length,
+					//groups, replication, modificationTime, preferredBlockSize, n, m);
 		
 		synchronized (rootDir) {
 			try {
@@ -190,6 +190,7 @@ class FSDirectory implements FSConstants, Closeable {
 								blocks[i], newF));
 					} 
 					// TODO
+					/*
 					if(cBlocks != null){
 						int nrCBlocks = cBlocks.length;
 						for(int i = 0; i < nrCBlocks; i++){
@@ -197,6 +198,7 @@ class FSDirectory implements FSConstants, Closeable {
 								blocks[i], newF));
 						}
 					}
+					*/
 				}
 			} catch (IOException e) {
 				return null;
@@ -206,9 +208,9 @@ class FSDirectory implements FSConstants, Closeable {
 	}
 
 	INodeDirectory addToParent(String src, INodeDirectory parentINode,
-			PermissionStatus permissions, Block[] blocks, Block[] cBlocks,
-			RSGroup[] groups, short replication, long modificationTime,
-			long quota, long preferredBlockSize, int n, int m) {
+			PermissionStatus permissions, Block[] blocks, //Block[] cBlocks,
+			/*RSGroup[] groups,*/ short replication, long modificationTime,
+			long quota, long preferredBlockSize /*, int n, int m*/) {
 		// create new inode
 		INode newNode;
 		if (blocks == null) {
@@ -219,9 +221,11 @@ class FSDirectory implements FSConstants, Closeable {
 				newNode = new INodeDirectory(permissions, modificationTime);
 			}
 		} else
-			newNode = new INodeFile(permissions, blocks.length, cBlocks.length,
-					groups, replication, modificationTime,
-					preferredBlockSize, n, m); // TODO
+			//newNode = new INodeFile(permissions, blocks.length, cBlocks.length,
+					//groups, replication, modificationTime,
+					//preferredBlockSize, n, m); // TODO
+			newNode = new INodeFile(permissions, blocks.length,
+					replication, modificationTime, preferredBlockSize); // TODO
 		// add new node to the parent
 		INodeDirectory newParent = null;
 		synchronized (rootDir) {
@@ -238,11 +242,11 @@ class FSDirectory implements FSConstants, Closeable {
 				// Add file->block mapping
 				INodeFile newF = (INodeFile) newNode;
 				for (int i = 0; i < nrBlocks; i++) {
-					newF.setBlock(i, namesystem.blocksMap.addINode(blocks[i],
-							newF));
+					newF.setBlock(i, namesystem.blocksMap.addINode(blocks[i], newF));
 				}
 			}
 			// TODO
+			/* TODO
 			if(cBlocks != null) {
 				int nrCBlocks = cBlocks.length;
 				INodeFile newF = (INodeFile) newNode;
@@ -250,7 +254,7 @@ class FSDirectory implements FSConstants, Closeable {
 					newF.setCodingBlocks(i, namesystem.blocksMap.addINode(cBlocks[i],
 							newF));
 				}
-			}
+			}*/
 		}
 		return newParent;
 	}
