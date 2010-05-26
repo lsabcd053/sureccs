@@ -484,14 +484,40 @@ class FSEditLog {
 						// TODO
 						// TODO
 						// TODO
+						/*
 						Block[] cBlocks = null;
-						cBlocks = readBlocks(in);
+						//cBlocks = readBlocks(in);
+						//Block blocks[] = null;
+						if (logVersion <= -14) {
+							cBlocks = readBlocks(in);
+						} else {
+							BlockTwo oldblk = new BlockTwo();
+							int num = in.readInt();
+							cBlocks = new Block[num];
+							for (int i = 0; i < num; i++) {
+								oldblk.readFields(in);
+								cBlocks[i] = new Block(oldblk.blkid, oldblk.len,
+										Block.GRANDFATHER_GENERATION_STAMP);
+							}
+						}
+						for(int i = 0; i < cBlocks.length; i++){
+							if(cBlocks[i].getNumBytes() != fsNamesys.getDefaultBlockSize()){
+								cBlocks[i].setNumBytes(fsNamesys.getDefaultBlockSize());
+							}
+						}
 						
 						RSGroup[] groups = null;
 						groups = readGroups(in);
+						Debug.writeTime();
+						Debug.writeDebug("At FSEditLog.java, in the func: loadFSEdits.");
+						Debug.writeDebug("This time we got a group with a length of " + groups.length);
 						
 						int n = Integer.parseInt(FSImage.readString(in));						
 						int m = Integer.parseInt(FSImage.readString(in));
+						
+						Debug.writeDebug("This time we got a RSn of " + n);
+						Debug.writeDebug("This time we got a RSm of " + m);
+						*/
 						
 						// TODO
 						
@@ -528,8 +554,11 @@ class FSEditLog {
 
 						// add to the file tree
 						INodeFile node = (INodeFile) fsDir.unprotectedAddFile(
-								path, permissions, blocks, cBlocks, groups, replication, mtime,
-								blockSize, n, m);
+								path, permissions, blocks, replication, mtime,
+								blockSize);
+						//INodeFile node = (INodeFile) fsDir.unprotectedAddFile(
+								//path, permissions, blocks, cBlocks, groups, replication, mtime,
+								//blockSize, n, m);
 						if (opcode == OP_ADD) {
 							numOpAdd++;
 							//
@@ -537,12 +566,18 @@ class FSEditLog {
 							// INodeUnderConstruction.
 							// Recreate in-memory lease record.
 							//
+							//TODO INodeFileUnderConstruction cons = new INodeFileUnderConstruction(
+									//node.getLocalNameBytes(), node.getReplication(), 
+									//node.getModificationTime(), node.getPreferredBlockSize(),
+									//node.getBlocks(), node.getGroups(), node.getCodingBlocks(),
+									//node.getPermissionStatus(), clientName,
+									//clientMachine, null, node.RSn, node.RSm);
 							INodeFileUnderConstruction cons = new INodeFileUnderConstruction(
 									node.getLocalNameBytes(), node.getReplication(), 
 									node.getModificationTime(), node.getPreferredBlockSize(),
-									node.getBlocks(), node.getGroups(), node.getCodingBlocks(),
-									node.getPermissionStatus(), clientName,
-									clientMachine, null, node.RSn, node.RSm);
+									node.getBlocks(), node.getPermissionStatus(), clientName,
+									clientMachine, null);
+							
 							fsDir.replaceNode(path, node, cons);
 							fsNamesys.leaseManager.addLease(cons.clientName,
 									path);
@@ -865,12 +900,27 @@ class FSEditLog {
 				FSEditLog.toLogReplication(newNode.getReplication()),
 				FSEditLog.toLogLong(newNode.getModificationTime()),
 				FSEditLog.toLogLong(newNode.getPreferredBlockSize()) };
+		/*
+		if(newNode.getCodingBlocks() != null && newNode.getGroups() != null){
+			logEdit(OP_ADD, new ArrayWritable(UTF8.class, nameReplicationPair),
+					new ArrayWritable(Block.class, newNode.getBlocks()),
+					new ArrayWritable(Block.class, newNode.getCodingBlocks()),
+					new ArrayWritable(RSGroup.class, newNode.getGroups()),
+					new UTF8(String.valueOf(newNode.RSn)), 
+					new UTF8(String.valueOf(newNode.RSm)), 
+					newNode.getPermissionStatus(), 
+					new UTF8(newNode.getClientName()),
+					new UTF8(newNode.getClientMachine()));
+		} else {
+			logEdit(OP_ADD, new ArrayWritable(UTF8.class, nameReplicationPair),
+					new ArrayWritable(Block.class, newNode.getBlocks()),
+					newNode.getPermissionStatus(), 
+					new UTF8(newNode.getClientName()),
+					new UTF8(newNode.getClientMachine()));
+		}
+		*/
 		logEdit(OP_ADD, new ArrayWritable(UTF8.class, nameReplicationPair),
 				new ArrayWritable(Block.class, newNode.getBlocks()),
-				new ArrayWritable(Block.class, newNode.getCodingBlocks()),
-				new ArrayWritable(RSGroup.class, newNode.getGroups()),
-				new UTF8(String.valueOf(newNode.RSn)), 
-				new UTF8(String.valueOf(newNode.RSm)), 
 				newNode.getPermissionStatus(), 
 				new UTF8(newNode.getClientName()),
 				new UTF8(newNode.getClientMachine()));
@@ -884,13 +934,26 @@ class FSEditLog {
 				FSEditLog.toLogReplication(newNode.getReplication()),
 				FSEditLog.toLogLong(newNode.getModificationTime()),
 				FSEditLog.toLogLong(newNode.getPreferredBlockSize()) };
-		logEdit(OP_CLOSE, new ArrayWritable(UTF8.class, nameReplicationPair),
+		/*
+		if(newNode.getCodingBlocks() != null && newNode.getGroups() != null){
+			logEdit(OP_CLOSE, new ArrayWritable(UTF8.class, nameReplicationPair),
 				new ArrayWritable(Block.class, newNode.getBlocks()),
 				new ArrayWritable(Block.class, newNode.getCodingBlocks()),
 				new ArrayWritable(RSGroup.class, newNode.getGroups()),
 				new UTF8(String.valueOf(newNode.RSn)), 
 				new UTF8(String.valueOf(newNode.RSm)), 
 				newNode.getPermissionStatus());
+		} else {
+			logEdit(OP_CLOSE, new ArrayWritable(UTF8.class, nameReplicationPair),
+					new ArrayWritable(Block.class, newNode.getBlocks()),
+					newNode.getPermissionStatus());
+		}
+		*/
+
+		logEdit(OP_CLOSE, new ArrayWritable(UTF8.class, nameReplicationPair),
+				new ArrayWritable(Block.class, newNode.getBlocks()), newNode
+						.getPermissionStatus());
+
 	}
 
 	/**
@@ -1148,6 +1211,7 @@ class FSEditLog {
 			blocks[i] = new Block();
 			blocks[i].readFields(in);
 		}
+
 		return blocks;
 	}
 	
