@@ -866,9 +866,9 @@ class INodeFile extends INode {
 	// TODO Important!! This construct method will support the convert between
 	// INodeFile and INodeFileUnderConstruction
 	INodeFile(PermissionStatus permissions, int nrBlocks, int nrCodedBlocks,
-			RSGroup[] groups, short replication,
+			int nrGroups, short replication,
 			long modificationTime, long preferredBlockSize, int n, int m) {
-		this(permissions, new BlockInfo[nrBlocks], groups,
+		this(permissions, new BlockInfo[nrBlocks], new RSGroup[nrGroups],
 				new BlockInfo[nrCodedBlocks], replication,
 				modificationTime, preferredBlockSize, n, m);
 	}
@@ -1030,10 +1030,12 @@ class INodeFile extends INode {
 	void setCodingBlocks(int idx, BlockInfo blk) {
 		this.codingBlocks[idx] = blk;
 		int numCodingBlock = (RSn - RSm);
-		int grpIndex = (int) (idx / numCodingBlock);
-		int blockInGroup = (int) (idx % numCodingBlock);
-		RSGroup group = this.groups[grpIndex];
-		group.setBlock(blockInGroup, blk);
+		if (this.groups != null) {
+			int grpIndex = (int) (idx / numCodingBlock);
+			int blockInGroup = (int) (idx % numCodingBlock);
+			RSGroup group = this.groups[grpIndex];
+			group.setBlock(blockInGroup, blk);
+		}
 	}
 
 	RSGroup getGroupfromBlock(BlockInfo block) throws IOException {		
@@ -1131,10 +1133,12 @@ class INodeFile extends INode {
 		this.blocks[idx] = blk;
 
 		// TODO We must meanwhile update the block in the group
-		int grpIndex = (int) (idx / RSm);
-		int blockInGroup = (int) (idx % RSm);
-		RSGroup group = this.groups[grpIndex];
-		group.setBlock(blockInGroup, blk);
+		if (this.groups != null) {
+			int grpIndex = (int) (idx / RSm);
+			int blockInGroup = (int) (idx % RSm);
+			RSGroup group = this.groups[grpIndex];
+			group.setBlock(blockInGroup, blk);
+		}
 		// TODO add here
 	}
 
@@ -1235,10 +1239,10 @@ class INodeFileUnderConstruction extends INodeFile {
 	// TODO add here to support the construct of groups and codingBlocks
 	INodeFileUnderConstruction(byte[] name, short blockReplication,
 			long modificationTime, long preferredBlockSize, BlockInfo[] blocks,
-			RSGroup[] groups, BlockInfo[] codedBlocks,
+			RSGroup[] groups, BlockInfo[] cBlocks,
 			PermissionStatus perm, String clientName, String clientMachine,
 			DatanodeDescriptor clientNode, int n, int m) throws IOException {
-		super(perm, blocks, groups, codedBlocks,blockReplication, modificationTime,
+		super(perm, blocks, groups, cBlocks,blockReplication, modificationTime,
 				preferredBlockSize, n, m);
 		setLocalName(name);
 		this.clientName = new StringBytesWritable(clientName);

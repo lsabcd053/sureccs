@@ -802,6 +802,9 @@ class FSImage extends Storage {
 				}
 
 				// TODO read the code-relevant field
+				// I don't know what is the version meaningful
+				// I default version the newest, and do the 
+				// newest-version handling
 				int numCBlocks = in.readInt();
 				Block cBlocks[] = new Block[numCBlocks];
 				for (int j = 0; j < numCBlocks; j++) {

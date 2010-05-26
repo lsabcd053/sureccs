@@ -165,14 +165,19 @@ class FSDirectory implements FSConstants, Closeable {
 	/**
    */
 	INode unprotectedAddFile(String path, PermissionStatus permissions,
-			Block[] blocks, short replication, long modificationTime,
-			long preferredBlockSize) {
+			Block[] blocks, Block[] cBlocks, RSGroup[] groups, 
+			short replication, long modificationTime,
+			long preferredBlockSize, int n, int m) {
 		INode newNode;
 		if (blocks == null)
 			newNode = new INodeDirectory(permissions, modificationTime);
-		else
+		else if(cBlocks == null)
 			newNode = new INodeFile(permissions, blocks.length, replication,
 					modificationTime, preferredBlockSize);
+		else // TODO
+			newNode = new INodeFile(permissions, blocks.length, cBlocks.length,
+					groups.length, replication, modificationTime, preferredBlockSize, n, m);
+		
 		synchronized (rootDir) {
 			try {
 				newNode = addNode(path, newNode, false);
@@ -183,6 +188,14 @@ class FSDirectory implements FSConstants, Closeable {
 					for (int i = 0; i < nrBlocks; i++) {
 						newF.setBlock(i, namesystem.blocksMap.addINode(
 								blocks[i], newF));
+					} 
+					// TODO
+					if(cBlocks != null){
+						int nrCBlocks = cBlocks.length;
+						for(int i = 0; i < nrCBlocks; i++){
+							newF.setCodingBlocks(i, namesystem.blocksMap.addINode(
+								blocks[i], newF));
+						}
 					}
 				}
 			} catch (IOException e) {
