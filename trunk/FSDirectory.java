@@ -176,7 +176,7 @@ class FSDirectory implements FSConstants, Closeable {
 					modificationTime, preferredBlockSize);
 		else // TODO
 			newNode = new INodeFile(permissions, blocks.length, cBlocks.length,
-					groups.length, replication, modificationTime, preferredBlockSize, n, m);
+					groups, replication, modificationTime, preferredBlockSize, n, m);
 		
 		synchronized (rootDir) {
 			try {
