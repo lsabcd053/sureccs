@@ -854,6 +854,7 @@ public class DataNode extends Configured implements InterDatanodeProtocol,
 	 * @throws IOException
 	 */
 	private boolean processCommand(DatanodeCommand cmd) throws IOException {
+		String s = "At DataNode.java, in the func: processCommand.";
 		//Debug.writeDebug("At DataNode.java, In the func: processCommand");
 		if (cmd == null) {
 			//Debug.writeDebug("Half return because no commands to be processed!");
@@ -865,6 +866,23 @@ public class DataNode extends Configured implements InterDatanodeProtocol,
 		switch (cmd.getAction()) {
 		case DatanodeProtocol.DNA_TRANSFER:
 			// Send a copy of a block to another datanode
+			// TODO for test
+			DatanodeInfo[][] rtargets = bcmd.getTargets();
+			Block[] rblocks = bcmd.getBlocks();
+			
+			if (rtargets != null) {
+				Debug.writeTime();
+				Debug.writeDebug(s);
+				Debug.writeDebug("Here get a replication command!");
+
+				for (int i = 0; i < rblocks.length; i++) {
+					Debug.writeDebug("The block:" + rblocks[i]
+							+ " is going to be replicated to the targets:");
+					for (int j = 0; j < rtargets[i].length; j++) {
+						Debug.writeDebug(rtargets[i][j].toString());
+					}
+				}
+			}
 			transferBlocks(bcmd.getBlocks(), bcmd.getTargets());
 			myMetrics.blocksReplicated.inc(bcmd.getBlocks().length);
 			break;
@@ -873,16 +891,16 @@ public class DataNode extends Configured implements InterDatanodeProtocol,
 			//encodingBlocks(bcmd.getBlocks(), bcmd.getSources(), bcmd
 					//.getTargets(), bcmd.getGroup());
 			// TODO Should we firstly test the connection to the sources
-			String s = "At DataNode.java, in the func: processCommand.";
+			
 			Debug.writeTime();
 			Debug.writeDebug(s);
 			Debug.writeDebug("Here is going to handle the encoding command.");
 			DatanodeInfo[] srcs = bcmd.getSources()[0];
-			DatanodeInfo[] tars = bcmd.getTargets()[0];
+			DatanodeInfo[][] tars = bcmd.getTargets();
 			RSGroup group= bcmd.getGroup();
 			Block[] blocks = bcmd.getBlocks();
 			Block[] grpBlocks = group.getBlocks();
-			int rep = tars.length / blocks.length;
+			//int rep = tars.length / blocks.length;
 			int size = group.getNumOfRealBlocks();
 			
 			Debug.writeDebug("The pre-encoding group from the command is: " + group + ";");
@@ -900,9 +918,9 @@ public class DataNode extends Configured implements InterDatanodeProtocol,
 			for(int i = 0 ; i < blocks.length; i++)
 			{
 				Debug.writeDebug(blocks[i] + " is to be transferred to:");
-				for(int j = 0; j < rep; j++)
+				for(int j = 0; j < tars[i].length; j++)
 				{
-					Debug.writeDebug(tars[j + i * rep] + ";");
+					Debug.writeDebug(tars[i][j] + ";");
 				}
 			}
 						
@@ -929,18 +947,18 @@ public class DataNode extends Configured implements InterDatanodeProtocol,
 			break;
 		case DatanodeProtocol.DNA_DECODING:
 			// TODO Should we firstly test the connection to the sources
-			String s1 = "At DataNode.java, in the func: processCommand.";
+			//String s1 = "At DataNode.java, in the func: processCommand.";
 			Debug.writeTime();
-			Debug.writeDebug(s1);
+			Debug.writeDebug(s);
 			Debug.writeDebug("Here is going to handle the decoding command.");
 			DatanodeInfo[] srcs1 = bcmd.getSources()[0];
-			DatanodeInfo[] tars1 = bcmd.getTargets()[0];
+			DatanodeInfo[][] tars1 = bcmd.getTargets();
 			RSGroup group1= bcmd.getGroup();
 			Block[] blocks1 = bcmd.getBlocks();
 			Block[] grpBlocks1 = group1.getBlocks();
 			int index = bcmd.getIndex();
 			int count = 0;
-			int n = group1.getN();
+			//int n = group1.getN();
 			int m = group1.getM();
 			
 			Debug.writeDebug("The pre-decoding group from the command is:" + group1 + ";");
@@ -991,9 +1009,9 @@ public class DataNode extends Configured implements InterDatanodeProtocol,
 			}
 			Debug.writeDebug("The decoded blocks should be transferred to corresponding target nodes:");
 			Debug.writeDebug(blocks1[0] + " is to be transferred to:");
-			for(int i = 0; i < tars1.length; i++)
+			for(int i = 0; i < tars1[0].length; i++)
 			{
-				Debug.writeDebug(tars1[i] + ";");
+				Debug.writeDebug(tars1[0][i] + ";");
 			}
 					
 			new codingBlockControlor(blocks1, srcs1, tars1, group1, size1,
@@ -1065,7 +1083,7 @@ public class DataNode extends Configured implements InterDatanodeProtocol,
 	class codingBlockControlor{
 		Block[] blocks;
 		DatanodeInfo[] sources;
-		DatanodeInfo[] targets;	
+		DatanodeInfo[][] targets;	
 		RSGroup group;
 		int index;
 		int task; // Figure out if it's an encoding task or decoding task
@@ -1077,10 +1095,10 @@ public class DataNode extends Configured implements InterDatanodeProtocol,
 		CyclicBarrier barrier;
 		ExecutorService exec;
 		DFSOutputStream[] outstream;
-		int time;
+		//int time;
 		
 		public codingBlockControlor(Block[] blks, DatanodeInfo[] srcs, 
-				DatanodeInfo[] tars, RSGroup grp, int nthreads, int t, int[] nn, int idx)
+				DatanodeInfo[][] tars, RSGroup grp, int nthreads, int t, int[] nn, int idx)
 		{
 			this.blocks = blks;
 			this.sources = srcs;
@@ -1090,7 +1108,7 @@ public class DataNode extends Configured implements InterDatanodeProtocol,
 			this.task = t;
 			this.NotNull = nn;
 			this.index = idx;
-			time = 0;
+			//time = 0;
 			//barrier = new CyclicBarrier(nThreads);
 			exec = Executors.newFixedThreadPool(nThreads);	
 			
@@ -1105,28 +1123,31 @@ public class DataNode extends Configured implements InterDatanodeProtocol,
 					//: allBlocks[index].getNumBytes();
 			//time = 0;
 			//reader = new BlockReader[srcs.length];
-			int rep = targets.length / (n - m);
+			//int rep = targets.length / (n - m);
 			//exec.submit(this);
 			try {
 				if (task == DatanodeProtocol.DNA_ENCODING) {
 					outstream = new DFSOutputStream[n - m];						
 					for (int i = 0; i < (n - m); i++) {
-						DatanodeInfo[] tmpTars = new DatanodeInfo[rep];
-						System.arraycopy(targets, i * rep, tmpTars, 0, rep);
+						//DatanodeInfo[] tmpTars = new DatanodeInfo[rep];
+						//System.arraycopy(targets, i * rep, tmpTars, 0, rep);
 						outstream[i] = new DFSClient(new Configuration()).new DFSOutputStream(
-								tmpTars[0].getName(), codingBlocks[i],
-								estimateBlockSize, BUFFER_SIZE, false, tmpTars);
+								targets[i][0].getName(), codingBlocks[i],
+								estimateBlockSize, BUFFER_SIZE, false, targets[i]);
 					}
 
 				} else if (task == DatanodeProtocol.DNA_DECODING) {
 					outstream = new DFSOutputStream[1];
 					outstream[0] = new DFSClient(new Configuration()).new DFSOutputStream(
-							targets[0].getName(), allBlocks[index], estimateBlockSize,
-							BUFFER_SIZE, false, targets);
+							targets[0][0].getName(), allBlocks[index], estimateBlockSize,
+							BUFFER_SIZE, false, targets[0]);
 				} else {
+					Debug.writeDebug("The controlor doesn't know what task it is!");
 					return;
 				}
 			} catch(IOException e){
+				Debug.writeDebug("Got a IOException in DataNode::codingBlockControlor.codingBlockControlor");
+				Debug.writeDebug(e.getMessage());
 				
 			}
 			barrier = new CyclicBarrier(nThreads, new Runnable() {

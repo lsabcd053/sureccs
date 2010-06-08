@@ -165,11 +165,10 @@ class BlockCommand extends DatanodeCommand {
 	BlockCommand(int action, DatanodeDescriptor.BlockSrcTargetPair p) {
 		super(action);
 		blocks = new Block[p.blocks.length];
-		targets = new DatanodeInfo[1][];
 		sources = new DatanodeInfo[1][];
 		//targets = new DatanodeInfo[blocks.length][];
 		blocks = p.blocks;
-		targets[0] = p.targets;
+		targets = p.targets;
 		sources[0] = p.sources;
 		group = p.group;
 		index = p.index;

@@ -20,6 +20,7 @@ package org.apache.hadoop.dfs;
 import java.io.*;
 
 import org.apache.hadoop.io.*;
+import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.dfs.BlocksMap.BlockInfo;
 
 /**************************************************
@@ -45,7 +46,7 @@ class RSGroup implements Writable{
 	// TODO Add groupid here
 	private int rsn;
 	private int rsm;
-	private long lastBlockBytes;
+	//private long lastBlockBytes;
 	private int couldBeCoded; // This could be used to verify that if it has the
 	private boolean complete; // Verify if the grouping process ended
 	private int numOfRealBlocks;
@@ -98,8 +99,11 @@ class RSGroup implements Writable{
 		blocks = null;
 		couldBeCoded = 1;
 		complete = false;
-		rsn = FSConstants.RSn;
-		rsm = FSConstants.RSm;
+		
+		Configuration conf = new Configuration();		
+		rsn = conf.getInt("dfs.RSn", FSConstants.RSn);
+		rsm = conf.getInt("dfs.RSm", FSConstants.RSm);
+		
 		numOfRealBlocks = 0;
 	}
 

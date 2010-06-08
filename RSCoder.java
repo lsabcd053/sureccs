@@ -187,21 +187,21 @@ class RSCoder
         }
 
     }
-    public void RSDecode(short[][] buffers, short cut, short redundance)
-    {    	
-    	int len=buffers[0].length;
-    	A=new short[cut][];
-        for (int i = 0; i < cut; i++)
-        {
-        	A[i]=new short[buffers[i].length];
-        	System.arraycopy(buffers[i], 0, A[i], 0, buffers[i].length);
-            buffers[i] = new short[len];
-        }
-        for (int i = 0; i < cut; i++)
-            for (int j = 0; j < cut; j++)
-                for (int w = 0; w < len; w++)
-                    buffers[i][w] ^=mult[E[i][j]][A[j][w]];
-    }
+    //public void RSDecode(short[][] buffers, short cut, short redundance)
+    //{    	
+    	//int len=buffers[0].length;
+    	//A=new short[cut][];
+        //for (int i = 0; i < cut; i++)
+        //{
+        	//A[i]=new short[buffers[i].length];
+        	//System.arraycopy(buffers[i], 0, A[i], 0, buffers[i].length);
+            //buffers[i] = new short[len];
+        //}
+        //for (int i = 0; i < cut; i++)
+            //for (int j = 0; j < cut; j++)
+                //for (int w = 0; w < len; w++)
+                   // buffers[i][w] ^=mult[E[i][j]][A[j][w]];
+    //}
     public void RSDecode(short[][] buffers, short cut, short redundance,int index)
     {
     	A=new short[cut][];

@@ -17,9 +17,8 @@
  */
 package org.apache.hadoop.dfs;
 
-import org.apache.hadoop.conf.Configuration;
+//import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.dfs.FSConstants;
-
 import java.io.*;
 import java.security.*;
 
@@ -34,9 +33,9 @@ class Coder {
 	int buffer_size = FSConstants.BUFFER_SIZE; 
 	//int tail_size = 36;
 	byte[][] buf;
-	Configuration conf = new Configuration();
-	long blockSize = conf.getLong("dfs.block.size",
-			FSConstants.DEFAULT_BLOCK_SIZE);
+	//Configuration conf = new Configuration();
+	//long blockSize = conf.getLong("dfs.block.size",
+			//FSConstants.DEFAULT_BLOCK_SIZE);
 	public Coder() {
 		m_rs = new RSCoder();
 		RSCoder.setup_tables();
@@ -74,7 +73,7 @@ class Coder {
 			// TODO Set up an error log: Get a bad input stream
 			return;
 		}
-		buf = new byte[tMore][(int)blockSize];
+		buf = new byte[tMore][buffer_size];
 		byte[][] buffers = new byte[tCut][buffer_size];
 		byte[] temp;	
 		short[][] InputBytes = new short[tCut + tMore][];		
@@ -178,7 +177,7 @@ class Coder {
 			return;
 		}
 		short[] NotNull = new short[tCut];	
-		buf = new byte[1][(int)blockSize];
+		buf = new byte[1][buffer_size];
 		byte[][] buffers = new byte[tCut][buffer_size];
 		ByteArrayOutputStream bufferOut = new ByteArrayOutputStream();
 		int count = 0;
@@ -263,8 +262,8 @@ class Coder {
 						new FileInputStream(ls[k].getAbsolutePath())));				
 			}		
 		
-		DataOutputStream fsOut = new DataOutputStream(new BufferedOutputStream(
-				new FileOutputStream(sFile + ".RS_" + index)));;
+		//DataOutputStream fsOut = new DataOutputStream(new BufferedOutputStream(
+				//new FileOutputStream(sFile + ".RS_" + index)));;
 		//FileStreamDecode(fsIn, fsOut,(short)tCut, (short)tMore, index);
 		return true;
 	}	

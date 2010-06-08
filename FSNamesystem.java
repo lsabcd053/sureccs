@@ -1362,7 +1362,7 @@ class FSNamesystem implements FSConstants, FSNamesystemMBean {
 		}
 		//TODO Add Complete
 		
-		b = dir.addBlock(src, filenode, b, this.RSn, this.RSm);
+		b = dir.addBlock(src, filenode, b);
 		//b = dir.addBlock(src, file, b); Original
 		NameNode.stateChangeLog.info("BLOCK* NameSystem.allocateBlock: " + src
 				+ ". " + b);
@@ -2699,27 +2699,29 @@ class FSNamesystem implements FSConstants, FSNamesystemMBean {
 		}
 		
 		//TODO We assume that all the redundant block have applied the same number of targets
-		int size = tar[0].length;	
-		DatanodeDescriptor targets[] = new DatanodeDescriptor[size*(n-m)];
+		//int size = tar[0].length;	
+		//DatanodeDescriptor targets[] = new DatanodeDescriptor[size*(n-m)];
 		
 		// Here changes the tars to one dimension to consist with the API
-		for(i = 0; i < (n-m); i++) {
+		//for(i = 0; i < (n-m); i++) {
 			//size = tar[i].length;
-			for(int j = 0; j < size; j++) {
-				targets[j+i*size] = tar[i][j];
-			}
-		}
-		DatanodeDescriptor encodingNode = targets[0];
+			//for(int j = 0; j < size; j++) {
+				//targets[j+i*size] = tar[i][j];
+			//}
+		//}
+		DatanodeDescriptor encodingNode = tar[0][0];
 		Debug.writeDebug("The target datanode chosen to conduct the encoding task is "
-						+ targets[0]);
-		encodingNode.addBlockToBeEncoded(blks, sources, targets, group);
+						+ tar[0][0]);
+		encodingNode.addBlockToBeEncoded(blks, sources, tar, group);
 		encodingIndex--;
 		neededEncodedGroups.remove(group, false);
 		pendingEncodings.add(group, tar[0].length);
 		
-		for(DatanodeDescriptor dn : targets) {
-			workFound++;
-			dn.incBlocksScheduled();
+		for(i = 0; i < tar.length; i++){
+			for (DatanodeDescriptor dn : tar[i]) {
+				workFound++;
+				dn.incBlocksScheduled();
+			}
 		}
 		
 		Debug.writeDebug("Out of the func: initiateEncodingProcess.");
