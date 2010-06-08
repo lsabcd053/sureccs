@@ -62,13 +62,13 @@ public class DatanodeDescriptor extends DatanodeInfo {
 		// Then for an encoding process, the targets could be identified with 
 		// targets[r*i], and traverse i with (RS.n - RS.m ) times 
 		final DatanodeDescriptor[] sources;	
-		final DatanodeDescriptor[] targets;
+		final DatanodeDescriptor[][] targets;
 		// Index to confirm the position of the specified block to be decoded
 		final int index;
 		final RSGroup group;
 		
 		BlockSrcTargetPair(Block[] block, DatanodeDescriptor[] srcs,
-				DatanodeDescriptor[] targets, int idx, RSGroup grp) {
+				DatanodeDescriptor[][] targets, int idx, RSGroup grp) {
 			this.blocks = block;
 			this.sources = srcs;
 			this.targets = targets;
@@ -88,7 +88,7 @@ public class DatanodeDescriptor extends DatanodeInfo {
 			return sources;
 		}
 
-		public DatanodeDescriptor[] getTargets()
+		public DatanodeDescriptor[][] getTargets()
 		{
 			return targets;
 		}
@@ -148,7 +148,7 @@ public class DatanodeDescriptor extends DatanodeInfo {
 
 		/** Enqueue */
 		synchronized boolean offer(Block[] blocks, DatanodeDescriptor[] srcs,
-				DatanodeDescriptor[] targets, int idx, RSGroup grp) {
+				DatanodeDescriptor[][] targets, int idx, RSGroup grp) {
 			return blockcq.offer(new BlockSrcTargetPair(blocks, srcs, targets, idx, grp));
 		}
 
@@ -374,7 +374,7 @@ public class DatanodeDescriptor extends DatanodeInfo {
 	/**
 	 * Store block Encoding work.
 	 */
-	void addBlockToBeEncoded(Block[] blocks, DatanodeDescriptor[] srcs, DatanodeDescriptor[] targets, RSGroup grp) {
+	void addBlockToBeEncoded(Block[] blocks, DatanodeDescriptor[] srcs, DatanodeDescriptor[][] targets, RSGroup grp) {
 		assert (blocks != null && srcs != null && srcs.length > 0&& targets != null && targets.length > 0);
 		encodingBlocks.offer(blocks, srcs, targets, -1, grp); // For encoding tasks, the index is useless
 	}
@@ -387,9 +387,11 @@ public class DatanodeDescriptor extends DatanodeInfo {
 	void addBlockToBeDecoded(Block block, DatanodeDescriptor[] srcs, DatanodeDescriptor[] targets, int idx, RSGroup grp) {
 		assert (block != null && srcs != null && srcs.length > 0&& targets != null && targets.length > 0
 				  && idx >= 0 && idx < srcs.length);
-		Block blocks[] = new Block[1];
+		Block[] blocks = new Block[1];
 		blocks[0] = block;
-		decodingBlocks.offer(blocks, srcs, targets, idx, grp);
+		DatanodeDescriptor[][] tars = new DatanodeDescriptor[1][];
+		tars[0] = targets;
+		decodingBlocks.offer(blocks, srcs, tars, idx, grp);
 	}
 	//TODO
 
@@ -448,6 +450,22 @@ public class DatanodeDescriptor extends DatanodeInfo {
 	BlockCommand getReplicationCommand(int maxTransfers) {
 		List<BlockTargetPair> blocktargetlist = replicateBlocks
 				.poll(maxTransfers);
+		// TODO for test
+		String s = "At DatanodeDescriptor.java, in the func: getReplicationCommand";
+		if (blocktargetlist != null) {
+			Debug.writeTime();
+			Debug.writeDebug(s);
+			for (int i = 0; i < blocktargetlist.size(); i++) {
+				Debug.writeDebug("The node:" + this.toString()
+						+ " get a replication command.");
+				Debug.writeDebug("It will replicate the block:"
+						+ blocktargetlist.get(i).block + " to the targets:");
+				DatanodeDescriptor[] targets = blocktargetlist.get(i).targets;
+				for (int j = 0; j < targets.length; j++) {
+					Debug.writeDebug(targets[j].toString());
+				}
+			}
+		}
 		return blocktargetlist == null ? null : new BlockCommand(
 				DatanodeProtocol.DNA_TRANSFER, blocktargetlist);
 	}
@@ -484,7 +502,7 @@ public class DatanodeDescriptor extends DatanodeInfo {
 		Debug.writeDebug(s);
 		
 		DatanodeDescriptor[] sources = p.getSources();
-		DatanodeDescriptor[] targets = p.getTargets();
+		DatanodeDescriptor[][] targets = p.getTargets();
 		RSGroup group = p.getGroup();
 		Block[] blks = p.getBlocks();
 		
@@ -508,7 +526,8 @@ public class DatanodeDescriptor extends DatanodeInfo {
 			Debug.writeDebug("The targets for " + blks[i] + " is:");
 			for(int j = 0; j < rep; j++)
 			{
-				Debug.writeDebug(targets[j + i * rep] + ";");
+				//Debug.writeDebug(targets[j + i * rep] + ";");
+				Debug.writeDebug(targets[i][j] + ";");
 			}
 		}
 		BlockCommand cmd = new BlockCommand(DatanodeProtocol.DNA_ENCODING, p);
@@ -528,7 +547,7 @@ public class DatanodeDescriptor extends DatanodeInfo {
 		Debug.writeDebug(s);
 		
 		DatanodeDescriptor[] sources = p.getSources();
-		DatanodeDescriptor[] targets = p.getTargets();
+		DatanodeDescriptor[][] targets = p.getTargets();
 		RSGroup group = p.getGroup();
 		Block[] blks = p.getBlocks();
 		Block[] grpBlks = group.getBlocks();
@@ -550,9 +569,9 @@ public class DatanodeDescriptor extends DatanodeInfo {
 		}
 
 		Debug.writeDebug("The targets for recovered block " + blks[0] + " is:");
-		for(int i = 0; i < targets.length; i++)
+		for(int i = 0; i < targets[0].length; i++)
 		{
-				Debug.writeDebug(targets[i] + ";");
+				Debug.writeDebug(targets[0][i] + ";");
 		}
 		
 		BlockCommand cmd = new BlockCommand(DatanodeProtocol.DNA_DECODING, p);
