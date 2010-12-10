@@ -31,6 +31,7 @@ import org.apache.hadoop.fs.ContentSummary;
 import org.apache.hadoop.fs.permission.*;
 import org.apache.hadoop.dfs.BlocksMap.BlockInfo;
 import org.apache.hadoop.dfs.FSConstants;
+import org.apache.hadoop.conf.*;
 
 /**
  * We keep an in-memory representation of the file/block hierarchy. This is a
@@ -866,9 +867,9 @@ class INodeFile extends INode {
 	// TODO Important!! This construct method will support the convert between
 	// INodeFile and INodeFileUnderConstruction
 	INodeFile(PermissionStatus permissions, int nrBlocks, int nrCodedBlocks,
-			int nrGroups, short replication,
+			RSGroup[] groups, short replication,
 			long modificationTime, long preferredBlockSize, int n, int m) {
-		this(permissions, new BlockInfo[nrBlocks], new RSGroup[nrGroups],
+		this(permissions, new BlockInfo[nrBlocks], groups,
 				new BlockInfo[nrCodedBlocks], replication,
 				modificationTime, preferredBlockSize, n, m);
 	}
@@ -880,9 +881,10 @@ class INodeFile extends INode {
 
 		// TODO add groups here
 		groups = null;
-		codingBlocks = null;
-		RSn = FSConstants.RSn;
-		RSm = FSConstants.RSm;
+		codingBlocks = null;		
+		Configuration conf = new Configuration();		
+		this.RSn = conf.getInt("dfs.RSn", FSConstants.RSn);
+		this.RSm = conf.getInt("dfs.RSm", FSConstants.RSm);
 	}
 
 	protected INodeFile(PermissionStatus permissions, BlockInfo[] blklist,
@@ -893,8 +895,9 @@ class INodeFile extends INode {
 		blocks = blklist;
 		groups = null;
 		codingBlocks = null;
-		RSn = FSConstants.RSn;
-		RSm = FSConstants.RSm;
+		Configuration conf = new Configuration();		
+		this.RSn = conf.getInt("dfs.RSn", FSConstants.RSn);
+		this.RSm = conf.getInt("dfs.RSm", FSConstants.RSm);
 	}
 	
 	// TODO Important!! This construct method will support the convert between
@@ -909,8 +912,7 @@ class INodeFile extends INode {
 		groups = grpList;
 		codingBlocks = codedBlkList;
 		RSn = n;
-		RSm = m;
-		
+		RSm = m;		
 	}
 
 	/**
@@ -1065,7 +1067,7 @@ class INodeFile extends INode {
 	 * add a block to the block list
 	 * @throws IOException 
 	 */
-	void addBlock(BlockInfo newblock, int n, int m) throws IOException {
+	void addBlock(BlockInfo newblock) throws IOException {
 		// TODO SUR_ECCS.log <function:"Add new block "+newBlock+" to file "+this.toString()>
 		String s = "At INode.java, INodeFile.addBlock,"+
 				   "<function:Add new block " +
@@ -1092,11 +1094,6 @@ class INodeFile extends INode {
 		}
 		// size == 0 indicate this is the first add
 		// and we just update the data in the first add 
-		if(size == 0)
-		{
-			this.RSn = n;
-			this.RSm = m;
-		}
 		// TODO I choose here to add the block to ensure consistency
 		if (size % RSm == 0) {
 			RSGroup newGroup = new RSGroup(grpSize++, RSn, RSn, RSm);
@@ -1147,7 +1144,13 @@ class INodeFile extends INode {
 		for (Block blk : blocks) {
 			v.add(blk);
 		}
+		// TODO to add the coding blocks to be removed list
+		for (Block cblk : codingBlocks) {
+			v.add(cblk);
+		}
 		blocks = null;
+		codingBlocks = null; // TODO
+		groups = null;
 		return 1;
 	}
 
