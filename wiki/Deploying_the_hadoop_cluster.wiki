@@ -4,10 +4,12 @@
 = Introduction =
 This would help you deploy the hadoop cluster, namenode and datanodes included, in a linux-like system. We have done a very good test in ubuntu 8.04, and we are pretty sure that other os could also be available.
 
+Now we've updated to hadoop 0.21.0 deployed in ubuntu 10.04 or higher version
+
 
 = Details =
 
-前期：
+一：前期环境准备
 （1）安装sun的JDK
 sudo apt-get install sun-java6-jdk，如果你不确定是不是已经安装过了JDK，可以用命令：java -version来看看。
 如果说，java version不是sun的，或者是说java不是内部命令，那么就需要安装了。
@@ -31,43 +33,65 @@ sudo ssh-keygen -t dsa -P '' -f ~/.ssh/id_dsa
 sudo cat ~/.ssh/id_dsa.pub >> ~/.ssh/authorized_keys
 配置完成后，执行ssh localhsot,确认每台机器都可以使用ssh
 （5）在所有机器修改 /etc/hosts文件
-192.168.XXX.XXX     namenode	//192.168.66.101  xuwq-1				
-192.168.XXX.XXX     datanode 	//192.168.66.107  cis
+192.168.XXX.XXX     namenode			
+192.168.XXX.XXX     datanode
 （6）将namenode服务器上的authorized_keys的内容加到datanode台机器的authorized_keys文件中。让namenode可以不需要密码访问datanode服务器
 sudo scp authorized_keys XXX:/home/XXX/.ssh/	// cis:/home/xuwq/.ssh/ 或者直接用移动介质拷贝
 ssh XXX 					// ssh cis
 确认namenode可以免密码访问每台datanode
 
-安装配置HDFS系统:
+（7）搭建nfs文件系统（具体参考鸟哥私房菜http://linux.vbird.org/linux_server/0330nfs.php#nfsserver_exports）
+
+在namenode上安装nfs server 和client
+sudo apt-get install nfs-kernel-server nfs-common portmap(很对老版本ubuntu，新版本默认集成)
+在每个datanode上安装nfs client
+sudo apt-get install nfs-common protmap
+然后在每个节点上创建nfs共享目录 nfs_home，保证每个节点都有相同的绝对路径
+mkdir nfs_home
+
+在这里我们用$NFS_HOME表示nfs文件的绝对路径
+
+在namenode上运行sudo /etc/init.d/nfs-kernel-server start启动nfs-server
+修改/etc/exports添加如下信息：
+$NFS_HOME datanode1(rw,sync) #后面表示数据节点访问共享文件夹的访问权限，/etc/exports有介绍，主要的权限有rw, ro, wo, sync, no_subtree_check等，注意各个权限用“,”分隔，不能有空格；
+修改好之后，在namenode上运行sudo exports -rv，这步没做则各节点无法mount
+
+随后在每个datanode上运行如下命令挂在共享文件(括号中为注释内容)
+sudo mount namenode:$NFS_HOME(@namenode) $NFS_HOME(@each datanode's local)
+
+
+二：安装配置Hadoop分布式系统:
 （1）配置Hadoop环境变量 
+下载hadoop安装包以后
+tar xvf hadoop-xxx.tat.gz $NFS_HOME/hadoop （注意拷贝到nfs共享文件夹底下）
 在/etc/environment文件尾添加：
-HADOOP_HOME=/home/xuwq/hadoop-0.18.3
+HADOOP_HOME= $NFS_HOME/hadoop
 HADOOP_CONF_DIR=$HADOOP_HOME/conf  
-HADOOP_LOG_DIR=/home/xuwq/hadoop-0.18.3/log
+HADOOP_LOG_DIR=$HADOOP_HOME/log
 在~/.bashrc文件尾添加:
-HADOOP_HOME=/home/xuwq/hadoop-0.18.3 #hadoop的主目录  
+HADOOP_HOME= $NFS_HOME/hadoop#hadoop的主目录  
 export HADOOP_HOME
 HADOOP_CONF_DIR=$HADOOP_HOME/conf   #hadoop的配置文件目录
 export HADOOP_CONF_DIR
-HADOOP_LOG_DIR=/home/xuwq/hadoop-0.18.3/log    #存放运行日志目录  
+HADOOP_LOG_DIR= $NFS_HOME/hadoop/log    #存放运行日志目录  
 export HADOOP_LOG_DIR  
 export PATH=$PATH:$HADOOP_HOME/bin   //这一句可以由下面一句替代，将JDK和Hadoop的路径写在一起
 export PATH=.:$PATH:$JAVA_HOME/bin:$JAVA_HOME/jre/bin:$HADOOP_HOME/bin
 修改完毕后需要重启。
 （2）修改hadoop的conf/masters和conf/slaves文件
-conf/masters	内容为namenode名，xuwq-1
-conf/slaves	内容为datanode名，cis
+conf/masters	内容为/etc/hosts里配置的namenode名，namenode
+conf/slaves	内容为/etc/hosts里配置的每个datanode名，datanode1, ....
 （3）修改conf/hadoop-env.sh文件
 添加jdk路径	export JAVA_HOME=/usr/lib/jvm/java-6-sun 
-（4）修改conf/hadoop-site.xml
+（4）修改conf/hadoop-site.xml (hadoop-0.18.3)
 <configuration>
    <property>  
       <name>fs.default.name</name>	//namenode的配置，机器名加端口  
-      <value>hdfs://XXX:54310/</value>	//hdfs://xuwq-1:54310
+      <value>hdfs://XXX:54310/</value>
    </property>
    <property>
      <name>mapred.job.tracker</name>	//JobTracker的配置，机器名加端口  
-      <value>hdfs://XXX:54311</value>	//hdfs://xuwq-1:54310
+      <value>hdfs://XXX:54311</value>	
    </property>
    <property>
       <name>dfs.replication</name>	//数据备份的数量，默认是3  
@@ -75,15 +99,54 @@ conf/slaves	内容为datanode名，cis
    </property>
    <property> 
 </configuration>
-（5）将hadoop的整体环境拷贝到datanode上面去	// datanode = cis
- scp -r /home/XXX/hadoop-0.18.3 XXX:/home/XXX/hadoop-0.18.3	//scp -r /home/xuwq-1/hadoop-0.18.3 cis://home/xuwq/hadoop-0.18.3
- (6)启动集群
+
+注意从hadoop-0.20开始分成几个文件分别配置
+##core-site.xml### 配置hdfs
+<configuration>
+   <property>  
+      <name>fs.default.name</name>	//namenode的配置，机器名加端口  or hadoop.defaultFS
+      <value>hdfs://namenode:9000/</value>
+   </property>
+   <property>
+
+##hdfs-site.xml### 配置hdfs的基本参数，配置在core-site.xml应该也可
+<configuration>
+<property>
+<name>dfs.replication</name>
+<value>1</value>
+</property>
+</configuration>
+
+##mapred-site.xml### map reduce相关的最好配置在这个文件底下
+<configuration>
+
+<property>
+<name>mapreduce.jobtracker.address</name>
+<value>hdfs://namenode:9001/</value>
+</property>
+
+</configuration>
+~                  
+
+
+
+ （5）启动集群
 先要格式化namenode, 执行hadoop namenode -format
+如果之前已经运行过然后停止系统的话，最后在每个节点上将存放的上次运行的data删除，如果没有配置过，应该是在/tmp/hadoop*文件夹底下
+rm -rf /tmp/hadoop*
+
 然后启动hdfs文件系统，执行start-all.sh，启动后可以用jps查看进程
 conf/masters文件里的机器运行的进程有NameNode, SecondaryNameNode, JobTracker
 conf/slaves文件里的机器运行的进程有DataNode, TaskTracker
-（7）停止集群
+
+在hadoop-0.20以后，用两个命令代替上述命令：
+start-dfs.sh
+start-mapred.sh
+（6）停止集群
 stop-all.sh
+相应的也替代为
+stop-dfs.sh
+stop-mapred.sh
 
 例子:
 例1：
@@ -95,7 +158,7 @@ $ echo "hello hadoop goodbye hadoop" >file2.txt
 # 将本地文件系统上的 /home/test-in 目录拷到 HDFS 的根目录上，目录名改为 input
 $ hadoop fs –put test-in input 
 #查看执行结果:
-$ hadoop jar hadoop-0.19.1/hadoop-0.19.1-examples.jar wordcount input output
+$ hadoop jar $HADOOP_HOME/hadoop-xxx-examples.jar wordcount input output
 # 将文件从 HDFS 拷到本地文件系统中再查看：
 $ hadoop fs -get output output
 $ cat output/*
@@ -104,9 +167,9 @@ $ hadoop fs -cat output/*
 
 例2：（文档中例）
 将输入文件拷贝到分布式文件系统：
-$ hadoop fs -put hadoop-0.18.3/conf input
+$ hadoop fs -put $HADOOP_HOME/conf input
 运行发行版提供的示例程序：
-$ hadoop jar hadoop-0.18.3/hadoop-*-examples.jar grep input output 'dfs[a-z.]+'
+$ hadoop jar $HADOOP_HOME/hadoop-xxx-examples.jar grep input output 'dfs[a-z.]+'
 查看输出文件：
 将输出文件从分布式文件系统拷贝到本地文件系统查看：
 $ hadoop fs -get output output
